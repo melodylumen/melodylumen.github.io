@@ -1,0 +1,21 @@
+// config/repositories.json
+{
+  "repositories": [
+    {
+      "owner": "your-org",
+      "name": "social-app",
+      "description": "Gander Social Application",
+      "translationPath": "src/locale/locales",
+      "languages": ["cr", "iu", "oj", "miq", "innu"],
+      "requiresAuth": true
+    },
+    {
+      "owner": "your-org",
+      "name": "other-app",
+      "description": "Another application with translations",
+      "translationPath": "locales",
+      "languages": ["fr", "es", "de"],
+      "requiresAuth": true
+    }
+  ]
+}

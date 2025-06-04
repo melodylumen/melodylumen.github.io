@@ -375,6 +375,11 @@ class TranslationApp {
     }
 }
 
+window.addEventListener('error', (e) => {
+    console.error('Global error:', e);
+    showErrorMessage('An unexpected error occurred. Please refresh and try again.');
+});
+
 // Initialize the app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     window.translationApp = new TranslationApp();

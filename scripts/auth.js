@@ -1,33 +1,20 @@
-// scripts/auth.js
-// Placeholder for user authentication and authorization
-
-function showAuthUI() {
-    // Render login or invite/token input
-    document.getElementById('auth-section').innerHTML = `
-    <button onclick="loginWithGithub()">Login with GitHub</button>
-    <input type="text" id="inviteToken" placeholder="Enter invite token">
-    <button onclick="loginWithToken()">Login with Token</button>
-  `;
-}
-
-function loginWithGithub() {
-    // TODO: Implement GitHub OAuth
-    alert('GitHub OAuth not implemented.');
-}
-
-function loginWithToken() {
-    // TODO: Implement token-based login
-    const token = document.getElementById('inviteToken').value;
-    alert('Token login not implemented. Token: ' + token);
-}
-
-showAuthUI();
-
-// scripts/auth.js - Enhanced authorization
 class AuthManager {
+    static instance = null;
+
     constructor() {
-        this.authMethod = null; // 'github' or 'token'
+        if (AuthManager.instance) {
+            return AuthManager.instance;
+        }
+        this.authMethod = null;
         this.credentials = null;
+        AuthManager.instance = this;
+    }
+
+    static getInstance() {
+        if (!AuthManager.instance) {
+            AuthManager.instance = new AuthManager();
+        }
+        return AuthManager.instance;
     }
 
     async loginWithGithub() {
@@ -56,4 +43,6 @@ class AuthManager {
         const response = await fetch('./config/authorized-tokens.json');
         return response.json();
     }
+
 }
+export default AuthManager;

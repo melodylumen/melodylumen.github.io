@@ -1,0 +1,14 @@
+{
+  "protection_rules": [
+    {
+      "pattern": "main",
+      "required_reviews": 1,
+      "dismiss_stale_reviews": true,
+      "require_code_owner_reviews": true,
+      "required_status_checks": [
+        "validate-translations",
+        "check-po-syntax"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+name: Validate Translations
+
+on:
+  pull_request:
+    paths:
+      - 'src/locale/locales/**/*.po'
+
+jobs:
+  validate:
+    name: Validate PO Files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Install gettext tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext
+
+      - name: Validate PO syntax
+        run: |
+          # Find all .po files
+          find src/locale/locales -name "*.po" -type f | while read -r file; do
+            echo "Validating: $file"
+            msgfmt -c -v -o /dev/null "$file" || exit 1
+          done
+
+      - name: Check for missing translations
+        run: |
+          # Custom script to check completeness
+          node .github/scripts/check-translations.js
+
+      - name: Post comment with validation results
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ Translation validation failed. Please check the syntax of your .po files.'
+            })

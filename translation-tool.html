@@ -1122,6 +1122,22 @@
         updateStats();
     }
 
+    // Submit translations to GitHub
+    async function submitTranslations(translations) {
+        const response = await fetch('/api/submit-to-github', {
+            method: 'POST',
+            body: JSON.stringify({
+                language: currentLanguage,
+                translations: translations,
+                metadata: {
+                    translator: userName,
+                    email: userEmail,
+                    timestamp: new Date().toISOString()
+                }
+            })
+        });
+    }
+
     // Clear translation
     function clearTranslation(msgid) {
         const textarea = document.querySelector(`[data-msgid="${escapeHtml(msgid)}"]`);

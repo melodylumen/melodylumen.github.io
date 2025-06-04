@@ -1,0 +1,23 @@
+name = "gander-social-translation-tool"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# KV namespace for real-time presence
+[[kv_namespaces]]
+binding = "gander-social-translations"
+id = "077b9a43f68c49a986cecae95ebf5f41"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "gander-social-translation-db"
+database_id = "65d4272a-e117-4737-a94b-b7d92f1e96a2"
+
+# Durable Objects for WebSocket handling
+[[durable_objects.bindings]]
+name = "WEBSOCKET_HANDLER"
+class_name = "TranslationWebSocketHandler"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["TranslationWebSocketHandler"]

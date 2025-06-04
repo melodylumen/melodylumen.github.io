@@ -1,0 +1,50 @@
+name: Scheduled Translation Batch Processing
+
+on:
+  # Run every day at 2 AM UTC
+  schedule:
+    - cron: '0 2 * * *'
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  batch-process:
+    name: Process Translation Queue
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check queue
+        id: check
+        run: |
+          QUEUE_SIZE=$(find translations-queue -name "*.json" -type f | wc -l)
+          echo "queue_size=${QUEUE_SIZE}" >> $GITHUB_OUTPUT
+          
+          if [ $QUEUE_SIZE -eq 0 ]; then
+            echo "No translations in queue"
+            exit 0
+          fi
+
+      - name: Process all queued translations
+        if: steps.check.outputs.queue_size > 0
+        run: |
+          # Process each file in the queue
+          for file in translations-queue/*.json; do
+            if [ -f "$file" ]; then
+              echo "Processing $file"
+              # Trigger the main workflow for each file
+              gh workflow run process-translations.yml \
+                -f translation_file="$file" \
+                -f translator_name="Batch Process" \
+                -f translator_email="batch@translation-tool.com"
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,29 @@
+name: Handle External Translation Submission
+
+on:
+  repository_dispatch:
+    types: [translation-submission]
+
+jobs:
+  process-webhook:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Save translation to queue
+        run: |
+          # Create queue directory
+          mkdir -p translations-queue
+          
+          # Save the payload
+          FILENAME="submission-$(date +%s).json"
+          echo '${{ toJson(github.event.client_payload) }}' > translations-queue/$FILENAME
+          
+          # Commit and push
+          git config user.name "Translation Bot"
+          git config user.email "bot@translation-tool.com"
+          git add translations-queue/$FILENAME
+          git commit -m "Add translation submission to queue"
+          git push

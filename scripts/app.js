@@ -1,360 +1,673 @@
 // scripts/app.js - Main application controller
 class TranslationApp {
     constructor() {
-        this.auth = new AuthManager();
-        this.config = new RepositoryConfig();
-        this.tracker = new ChangeTracker();
-        this.prManager = new PRManager();
-        this.currentTranslations = {};
-        this.isAuthenticated = false;
+        this.api = new APIClient();
+        this.translationManager = new TranslationManager(this.api);
+        this.currentUser = null;
+        this.currentRepo = null;
+        this.currentLanguage = null;
+        this.ws = null;
+        this.changes = new Map();
     }
 
     async init() {
-        // Check for existing authentication
-        this.checkExistingAuth();
-
-        // Setup UI event handlers
-        this.setupEventHandlers();
-
-        // Load repository configuration
-        const repoConfig = await this.config.loadConfig();
-        if (repoConfig) {
-            this.displayRepoOptions(repoConfig);
-        }
-    }
-
-    checkExistingAuth() {
-        const savedAuth = localStorage.getItem('poToolAuth');
-        if (savedAuth) {
+        // Check for existing session
+        if (this.api.sessionToken) {
             try {
-                const authData = JSON.parse(savedAuth);
-                this.auth.authMethod = authData.method;
-                this.auth.credentials = authData.credentials;
-                this.isAuthenticated = true;
-                this.showTranslationInterface();
-            } catch (e) {
-                console.error('Invalid saved auth:', e);
-            }
-        }
-    }
-
-    setupEventHandlers() {
-        // Override global functions from existing scripts
-        window.loginWithGithub = () => this.handleGitHubLogin();
-        window.loginWithToken = () => this.handleTokenLogin();
-        window.submitPR = () => this.handleSubmitPR();
-        window.saveTranslation = (msgid) => this.handleSaveTranslation(msgid);
-    }
-
-    async handleGitHubLogin() {
-        const token = prompt('Enter your GitHub Personal Access Token:\n\nTo create one:\n1. Go to GitHub Settings > Developer settings > Personal access tokens\n2. Generate new token with "repo" scope\n3. Copy and paste it here');
-
-        if (token) {
-            try {
-                // Validate token by making a test API call
-                const response = await fetch('https://api.github.com/user', {
-                    headers: {
-                        'Authorization': `token ${token}`,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                });
-
-                if (response.ok) {
-                    const userData = await response.json();
-                    this.auth.authMethod = 'github';
-                    this.auth.credentials = { token, username: userData.login };
-                    this.saveAuth();
-                    this.isAuthenticated = true;
-                    alert(`Logged in as ${userData.login}`);
-                    this.showTranslationInterface();
-                } else {
-                    alert('Invalid token. Please check and try again.');
+                const validation = await this.api.validateSession();
+                if (validation.valid) {
+                    this.currentUser = validation.user;
+                    this.showApp();
+                    return;
                 }
             } catch (error) {
-                alert('Error validating token: ' + error.message);
+                console.error('Session validation failed:', error);
+                this.api.clearSession();
             }
+        }
+
+        // Show auth screen
+        this.showAuth();
+    }
+
+    // UI State Management
+    showAuth() {
+        document.getElementById('auth-section').style.display = 'block';
+        document.getElementById('app-section').style.display = 'none';
+    }
+
+    showApp() {
+        document.getElementById('auth-section').style.display = 'none';
+        document.getElementById('app-section').style.display = 'block';
+        document.getElementById('user-name').textContent = this.currentUser.name;
+
+        this.loadRepositories();
+    }
+
+    showLoading(text = 'Loading...') {
+        document.getElementById('loading').style.display = 'flex';
+        document.getElementById('loading-text').textContent = text;
+    }
+
+    hideLoading() {
+        document.getElementById('loading').style.display = 'none';
+    }
+
+    // Authentication
+    async loginWithGithub() {
+        const token = prompt(
+            'Enter your GitHub Personal Access Token:\n\n' +
+            'To create one:\n' +
+            '1. Go to GitHub Settings > Developer settings > Personal access tokens\n' +
+            '2. Generate new token with "repo" scope\n' +
+            '3. Copy and paste it here'
+        );
+
+        if (!token) return;
+
+        try {
+            this.showLoading('Authenticating...');
+            const result = await this.api.loginWithGithub(token);
+
+            if (result.success) {
+                this.currentUser = result.user;
+                this.showApp();
+            }
+        } catch (error) {
+            alert(`Login failed: ${error.message}`);
+        } finally {
+            this.hideLoading();
         }
     }
 
-    async handleTokenLogin() {
-        const token = document.getElementById('inviteToken').value;
-        if (!token) {
-            alert('Please enter an invite token');
+    async loginWithToken() {
+        const inviteToken = document.getElementById('inviteToken').value;
+        const email = document.getElementById('tokenEmail').value;
+        const name = document.getElementById('tokenName').value;
+
+        if (!inviteToken || !email) {
+            alert('Please enter both invite token and email');
             return;
         }
 
         try {
-            await this.auth.loginWithInvite(token);
-            this.isAuthenticated = true;
-            this.saveAuth();
-            alert('Successfully logged in with invite token');
-            this.showTranslationInterface();
+            this.showLoading('Authenticating...');
+            const result = await this.api.loginWithToken(inviteToken, email, name);
+
+            if (result.success) {
+                this.currentUser = result.user;
+                this.showApp();
+            }
         } catch (error) {
-            alert('Invalid invite token');
+            alert(`Login failed: ${error.message}`);
+        } finally {
+            this.hideLoading();
         }
     }
 
-    saveAuth() {
-        localStorage.setItem('poToolAuth', JSON.stringify({
-            method: this.auth.authMethod,
-            credentials: this.auth.credentials
-        }));
+    async logout() {
+        if (confirm('Are you sure you want to logout?')) {
+            this.api.clearSession();
+            this.currentUser = null;
+            this.disconnectWebSocket();
+            this.showAuth();
+        }
     }
 
-    showTranslationInterface() {
-        document.getElementById('auth-section').style.display = 'none';
-        document.getElementById('translation-section').style.display = 'block';
-
-        // Load the enhanced translation UI
-        this.loadTranslationUI();
-    }
-
-    async loadTranslationUI() {
-        const container = document.getElementById('translation-section');
-
-        // Create repository selector
-        container.innerHTML = `
-      <div class="repo-selector">
-        <h2>Select Repository</h2>
-        <div id="repo-options"></div>
-      </div>
-      <div id="translation-workspace" style="display: none;">
-        <div class="workspace-header">
-          <h2>Translation Editor</h2>
-          <div class="controls">
-            <button onclick="window.translationApp.showPendingChanges()">
-              View Changes (${this.tracker.getAllChanges().length})
-            </button>
-            <button onclick="submitPR()" class="btn-primary">Submit PR</button>
-          </div>
-        </div>
-        <div id="language-selector"></div>
-        <div id="translation-cards"></div>
-      </div>
-    `;
-    }
-
-    displayRepoOptions(config) {
-        const container = document.getElementById('repo-options');
-        if (!container) return;
-
-        container.innerHTML = config.repositories.map(repo => `
-      <div class="repo-card" onclick="window.translationApp.selectRepository('${repo.owner}', '${repo.name}', '${repo.translationPath}')">
-        <h3>${repo.owner}/${repo.name}</h3>
-        <p>${repo.description || 'No description'}</p>
-        <small>Path: ${repo.translationPath}</small>
-      </div>
-    `).join('');
-    }
-
-    async selectRepository(owner, name, path) {
-        this.config.setTargetRepository(owner, name, path);
-
-        // Hide repo selector, show workspace
-        document.querySelector('.repo-selector').style.display = 'none';
-        document.getElementById('translation-workspace').style.display = 'block';
-
-        // Load available languages
-        await this.loadLanguages();
-    }
-
-    async loadLanguages() {
+    // Repository Management
+    async loadRepositories() {
         try {
-            const files = await this.config.fetchPoFiles();
-            const languages = files
-                .filter(f => f.type === 'dir' && f.name !== 'en')
-                .map(f => f.name);
+            this.showLoading('Loading repositories...');
+            const repos = await this.api.getRepositories();
 
-            this.displayLanguages(languages);
+            const repoList = document.getElementById('repo-list');
+            repoList.innerHTML = repos.map(repo => `
+                <div class="repo-card" onclick="app.selectRepository('${repo.owner}', '${repo.name}', '${repo.translationPath}')">
+                    <h3>${repo.owner}/${repo.name}</h3>
+                    <p>${repo.description || 'No description available'}</p>
+                    <div class="repo-meta">
+                        <span>Path: ${repo.translationPath}</span>
+                        <span>${repo.languages.length} languages</span>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('repo-selector').style.display = 'block';
+            document.getElementById('language-selector').style.display = 'none';
+            document.getElementById('translation-workspace').style.display = 'none';
         } catch (error) {
-            alert('Error loading languages: ' + error.message);
+            alert(`Failed to load repositories: ${error.message}`);
+        } finally {
+            this.hideLoading();
         }
     }
 
-    displayLanguages(languages) {
-        const container = document.getElementById('language-selector');
-        container.innerHTML = `
-      <h3>Select Language to Translate</h3>
-      <div class="language-grid">
-        ${languages.map(lang => `
-          <button class="language-btn" onclick="window.translationApp.selectLanguage('${lang}')">
-            ${this.getLanguageName(lang)}
-          </button>
-        `).join('')}
-      </div>
-    `;
+    async selectRepository(owner, name, translationPath) {
+        this.currentRepo = { owner, name, translationPath };
+
+        try {
+            this.showLoading('Loading languages...');
+            const languages = await this.api.getRepositoryLanguages(owner, name);
+
+            const languageList = document.getElementById('language-list');
+            languageList.innerHTML = languages.map(lang => `
+                <button class="language-btn" onclick="app.selectLanguage('${lang}')">
+                    <span class="lang-code">${lang.toUpperCase()}</span>
+                    <span class="lang-name">${this.getLanguageName(lang)}</span>
+                </button>
+            `).join('');
+
+            document.getElementById('repo-selector').style.display = 'none';
+            document.getElementById('language-selector').style.display = 'block';
+        } catch (error) {
+            alert(`Failed to load languages: ${error.message}`);
+        } finally {
+            this.hideLoading();
+        }
     }
 
     async selectLanguage(language) {
         this.currentLanguage = language;
-
-        // Load both English template and target language translations
-        const enPath = `${this.config.translationPath}/en/messages.po`;
-        const langPath = `${this.config.translationPath}/${language}/messages.po`;
+        const repoKey = `${this.currentRepo.owner}/${this.currentRepo.name}`;
 
         try {
-            const [enContent, langContent] = await Promise.all([
-                this.config.fetchFileContent(enPath),
-                this.config.fetchFileContent(langPath)
-            ]);
+            this.showLoading('Loading translations...');
 
-            const enMessages = this.tracker.parsePOFile(enContent);
-            const langMessages = this.tracker.parsePOFile(langContent);
+            // Connect WebSocket for real-time collaboration
+            this.connectWebSocket();
 
-            this.currentTranslations = {
-                template: enMessages,
-                translations: langMessages
-            };
+            // Load translations
+            const translations = await this.translationManager.loadTranslations(
+                repoKey,
+                language,
+                this.currentRepo.translationPath
+            );
 
-            this.displayTranslations();
+            // Update UI
+            document.getElementById('workspace-title').textContent =
+                `${this.currentRepo.name} - ${this.getLanguageName(language)}`;
+
+            this.renderTranslations(translations);
+
+            document.getElementById('language-selector').style.display = 'none';
+            document.getElementById('translation-workspace').style.display = 'block';
+
+            this.updateChangeCounter();
         } catch (error) {
-            alert('Error loading translation files: ' + error.message);
+            alert(`Failed to load translations: ${error.message}`);
+        } finally {
+            this.hideLoading();
         }
     }
 
-    displayTranslations() {
+    // Translation Management
+    renderTranslations(translations) {
         const container = document.getElementById('translation-cards');
         container.innerHTML = '';
 
-        Object.entries(this.currentTranslations.template).forEach(([msgid, originalText]) => {
-            const currentTranslation = this.currentTranslations.translations[msgid] || '';
-            const card = this.createTranslationCard(msgid, originalText, currentTranslation);
+        Object.entries(translations).forEach(([msgid, data]) => {
+            const card = this.createTranslationCard(msgid, data);
             container.appendChild(card);
         });
     }
 
-    createTranslationCard(msgid, originalText, currentTranslation) {
+    createTranslationCard(msgid, data) {
         const card = document.createElement('div');
         card.className = 'translation-card';
         card.dataset.msgid = msgid;
 
-        const hasChange = this.tracker.changes.has(`${this.currentLanguage}:${msgid}`);
+        const changeKey = `${this.currentLanguage}:${msgid}`;
+        const hasChange = this.changes.has(changeKey);
+        const activeEditors = data.activeEditors || [];
 
         card.innerHTML = `
-      <div class="card-header">
-        <code class="msgid">${msgid}</code>
-        ${hasChange ? '<span class="change-indicator">Modified</span>' : ''}
-      </div>
-      <div class="original-text">
-        <strong>English:</strong> ${this.escapeHtml(originalText)}
-      </div>
-      <textarea 
-        class="translation-input" 
-        data-msgid="${msgid}"
-        placeholder="Enter translation..."
-      >${this.escapeHtml(currentTranslation)}</textarea>
-      <div class="card-actions">
-        <button onclick="window.translationApp.saveTranslation('${msgid}')">Save</button>
-        ${hasChange ? '<button onclick="window.translationApp.revertChange(\'' + msgid + '\')">Revert</button>' : ''}
-      </div>
-    `;
+            <div class="card-header">
+                <code class="msgid">${this.escapeHtml(msgid)}</code>
+                <div class="card-status">
+                    ${hasChange ? '<span class="change-indicator">Modified</span>' : ''}
+                    ${activeEditors.length > 0 ? `
+                        <span class="active-editors" title="${activeEditors.join(', ')}">
+                            ${activeEditors.length} editing
+                        </span>
+                    ` : ''}
+                </div>
+            </div>
+            
+            <div class="original-text">
+                <label>English:</label>
+                <div class="text-content">${this.escapeHtml(data.original)}</div>
+            </div>
+            
+            <div class="translation-field">
+                <label>${this.getLanguageName(this.currentLanguage)}:</label>
+                <textarea 
+                    class="translation-input" 
+                    data-msgid="${this.escapeHtml(msgid)}"
+                    placeholder="Enter translation..."
+                    onfocus="app.onTranslationFocus('${this.escapeHtml(msgid)}')"
+                    onblur="app.onTranslationBlur('${this.escapeHtml(msgid)}')"
+                    oninput="app.onTranslationChange('${this.escapeHtml(msgid)}')"
+                >${this.escapeHtml(data.translation || '')}</textarea>
+            </div>
+            
+            <div class="card-footer">
+                ${data.previousTranslation ? `
+                    <div class="previous-translation">
+                        Previous: <em>${this.escapeHtml(data.previousTranslation)}</em>
+                    </div>
+                ` : ''}
+                
+                <div class="card-actions">
+                    ${hasChange ? `
+                        <button onclick="app.revertChange('${this.escapeHtml(msgid)}')" class="btn-secondary">
+                            Revert
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
 
         return card;
     }
 
-    saveTranslation(msgid) {
+    async onTranslationFocus(msgid) {
+        // Notify others that we're editing this translation
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({
+                type: 'startEdit',
+                msgid,
+                user: this.currentUser.name
+            }));
+        }
+    }
+
+    async onTranslationBlur(msgid) {
+        // Notify others that we've stopped editing
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({
+                type: 'endEdit',
+                msgid,
+                user: this.currentUser.name
+            }));
+        }
+
+        // Save to backend
+        await this.saveTranslation(msgid);
+    }
+
+    async onTranslationChange(msgid) {
         const textarea = document.querySelector(`textarea[data-msgid="${msgid}"]`);
-        const newTranslation = textarea.value;
-        const originalText = this.currentTranslations.template[msgid];
-        const previousTranslation = this.currentTranslations.translations[msgid] || '';
+        const newValue = textarea.value;
+        const data = this.translationManager.getTranslation(msgid);
 
-        // Track the change
-        this.tracker.trackChange(
-            this.currentLanguage,
-            msgid,
-            originalText,
-            newTranslation,
-            previousTranslation
-        );
+        if (newValue !== data.translation) {
+            const changeKey = `${this.currentLanguage}:${msgid}`;
+            this.changes.set(changeKey, {
+                msgid,
+                language: this.currentLanguage,
+                original: data.original,
+                previous: data.translation || '',
+                new: newValue,
+                timestamp: new Date().toISOString()
+            });
 
-        // Update local state
-        this.currentTranslations.translations[msgid] = newTranslation;
+            this.updateChangeCounter();
+            this.refreshCard(msgid);
+        }
+    }
 
-        // Update UI
-        this.updateChangeCount();
-        this.refreshCard(msgid);
+    async saveTranslation(msgid) {
+        const changeKey = `${this.currentLanguage}:${msgid}`;
+        const change = this.changes.get(changeKey);
+
+        if (!change) return;
+
+        try {
+            const repoKey = `${this.currentRepo.owner}/${this.currentRepo.name}`;
+            await this.api.saveTranslation(
+                repoKey,
+                this.currentLanguage,
+                msgid,
+                change.new,
+                {
+                    originalText: change.original,
+                    previousTranslation: change.previous,
+                    filePath: `${this.currentRepo.translationPath}/${this.currentLanguage}/messages.po`
+                }
+            );
+
+            // Update local state
+            this.translationManager.updateTranslation(msgid, change.new);
+        } catch (error) {
+            console.error('Failed to save translation:', error);
+            // Keep the change in memory for retry
+        }
     }
 
     revertChange(msgid) {
         const changeKey = `${this.currentLanguage}:${msgid}`;
-        this.tracker.changes.delete(changeKey);
-        this.tracker.savePendingChanges();
+        const change = this.changes.get(changeKey);
 
-        // Revert to original translation
-        const textarea = document.querySelector(`textarea[data-msgid="${msgid}"]`);
-        textarea.value = this.currentTranslations.translations[msgid] || '';
+        if (change) {
+            // Revert textarea value
+            const textarea = document.querySelector(`textarea[data-msgid="${msgid}"]`);
+            textarea.value = change.previous;
 
-        this.updateChangeCount();
-        this.refreshCard(msgid);
+            // Remove from changes
+            this.changes.delete(changeKey);
+
+            this.updateChangeCounter();
+            this.refreshCard(msgid);
+        }
+    }
+
+    // UI Updates
+    updateChangeCounter() {
+        const count = this.changes.size;
+        document.getElementById('change-count').textContent = count;
+        document.getElementById('submit-pr-btn').disabled = count === 0;
     }
 
     refreshCard(msgid) {
         const card = document.querySelector(`.translation-card[data-msgid="${msgid}"]`);
-        const hasChange = this.tracker.changes.has(`${this.currentLanguage}:${msgid}`);
+        if (!card) return;
+
+        const changeKey = `${this.currentLanguage}:${msgid}`;
+        const hasChange = this.changes.has(changeKey);
 
         const indicator = card.querySelector('.change-indicator');
+        const statusDiv = card.querySelector('.card-status');
+
         if (hasChange && !indicator) {
-            card.querySelector('.card-header').innerHTML += '<span class="change-indicator">Modified</span>';
+            statusDiv.insertAdjacentHTML('afterbegin', '<span class="change-indicator">Modified</span>');
         } else if (!hasChange && indicator) {
             indicator.remove();
         }
     }
 
-    updateChangeCount() {
-        const count = this.tracker.getAllChanges().length;
-        const button = document.querySelector('button[onclick*="showPendingChanges"]');
-        if (button) {
-            button.textContent = `View Changes (${count})`;
-        }
+    // Filter and Search
+    filterTranslations() {
+        const searchTerm = document.getElementById('search-input').value.toLowerCase();
+        const filterStatus = document.getElementById('filter-status').value;
+
+        const cards = document.querySelectorAll('.translation-card');
+
+        cards.forEach(card => {
+            const msgid = card.dataset.msgid;
+            const originalText = card.querySelector('.original-text .text-content').textContent.toLowerCase();
+            const translationText = card.querySelector('.translation-input').value.toLowerCase();
+
+            // Search filter
+            const matchesSearch = !searchTerm ||
+                msgid.toLowerCase().includes(searchTerm) ||
+                originalText.includes(searchTerm) ||
+                translationText.includes(searchTerm);
+
+            // Status filter
+            let matchesStatus = true;
+            if (filterStatus === 'empty') {
+                matchesStatus = !card.querySelector('.translation-input').value.trim();
+            } else if (filterStatus === 'modified') {
+                matchesStatus = card.querySelector('.change-indicator') !== null;
+            }
+
+            card.style.display = matchesSearch && matchesStatus ? 'block' : 'none';
+        });
     }
 
-    showPendingChanges() {
-        const changes = this.tracker.getAllChanges();
-        if (changes.length === 0) {
-            alert('No pending changes');
+    // Pull Request Management
+    showChanges() {
+        if (this.changes.size === 0) {
+            alert('No changes to review');
             return;
         }
 
-        let summary = 'Pending Changes:\n\n';
-        changes.forEach(change => {
-            summary += `${change.language} - ${change.msgid}:\n`;
-            summary += `  From: "${change.previousTranslation}"\n`;
-            summary += `  To: "${change.newTranslation}"\n\n`;
+        const changesList = document.getElementById('changes-list');
+        changesList.innerHTML = '';
+
+        // Group changes by language
+        const changesByLanguage = new Map();
+        this.changes.forEach((change, key) => {
+            if (!changesByLanguage.has(change.language)) {
+                changesByLanguage.set(change.language, []);
+            }
+            changesByLanguage.get(change.language).push(change);
         });
 
-        alert(summary);
+        changesByLanguage.forEach((changes, language) => {
+            const section = document.createElement('div');
+            section.className = 'change-section';
+            section.innerHTML = `
+                <h3>${this.getLanguageName(language)} (${changes.length} changes)</h3>
+                <div class="change-items">
+                    ${changes.map(change => `
+                        <div class="change-item">
+                            <div class="change-msgid">${this.escapeHtml(change.msgid)}</div>
+                            <div class="change-diff">
+                                <div class="diff-old">- ${this.escapeHtml(change.previous || '(empty)')}</div>
+                                <div class="diff-new">+ ${this.escapeHtml(change.new)}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            changesList.appendChild(section);
+        });
+
+        document.getElementById('changes-modal').style.display = 'flex';
     }
 
-    async handleSubmitPR() {
-        const changes = this.tracker.getAllChanges();
-        if (changes.length === 0) {
+    closeChangesModal() {
+        document.getElementById('changes-modal').style.display = 'none';
+    }
+
+    async proceedToSubmitPR() {
+        this.closeChangesModal();
+        await this.submitPR();
+    }
+
+    async submitPR() {
+        if (this.changes.size === 0) {
             alert('No changes to submit');
             return;
         }
 
-        const title = prompt('Enter PR title:', `Update ${this.currentLanguage} translations`);
+        const title = prompt(
+            'Pull Request Title:',
+            `Update ${this.getLanguageName(this.currentLanguage)} translations`
+        );
+
         if (!title) return;
 
-        const description = prompt('Enter PR description (optional):', 'Translation updates from PO Translation Tool');
+        const description = prompt(
+            'Pull Request Description (optional):',
+            `Translation updates for ${this.currentRepo.name}`
+        );
 
         try {
-            const result = await this.prManager.createPullRequest(title, description || '');
+            this.showLoading('Creating pull request...');
+
+            // Prepare changes data
+            const changesArray = Array.from(this.changes.values());
+            const repoKey = `${this.currentRepo.owner}/${this.currentRepo.name}`;
+
+            const result = await this.api.submitPR(
+                repoKey,
+                title,
+                this.generatePRBody(description, changesArray),
+                changesArray
+            );
 
             if (result.success) {
+                alert(`Pull request created successfully!${result.prUrl ? `\n\nView at: ${result.prUrl}` : ''}`);
+
                 if (result.prUrl) {
-                    alert(`Pull Request created successfully!\n\nView at: ${result.prUrl}`);
                     window.open(result.prUrl, '_blank');
-                } else {
-                    alert(result.message);
                 }
-            } else {
-                alert(`Error creating PR: ${result.error}`);
+
+                // Clear changes
+                this.changes.clear();
+                this.updateChangeCounter();
+
+                // Refresh all cards
+                document.querySelectorAll('.translation-card').forEach(card => {
+                    this.refreshCard(card.dataset.msgid);
+                });
             }
         } catch (error) {
-            alert(`Error: ${error.message}`);
+            alert(`Failed to create pull request: ${error.message}`);
+        } finally {
+            this.hideLoading();
         }
     }
 
+    generatePRBody(description, changes) {
+        let body = description ? `${description}\n\n` : '';
+
+        body += `## Translation Changes\n\n`;
+        body += `This PR updates ${changes.length} translation${changes.length > 1 ? 's' : ''} `;
+        body += `for ${this.getLanguageName(this.currentLanguage)}.\n\n`;
+
+        body += `### Summary\n\n`;
+        body += `- **Repository**: ${this.currentRepo.owner}/${this.currentRepo.name}\n`;
+        body += `- **Language**: ${this.getLanguageName(this.currentLanguage)} (${this.currentLanguage})\n`;
+        body += `- **Translator**: ${this.currentUser.name}\n`;
+        body += `- **Changes**: ${changes.length}\n\n`;
+
+        body += `### Detailed Changes\n\n`;
+        body += `<details>\n<summary>Click to expand</summary>\n\n`;
+
+        changes.forEach(change => {
+            body += `#### \`${change.msgid}\`\n`;
+            body += `- **Original (English)**: ${change.original}\n`;
+            body += `- **Previous**: ${change.previous || '_(empty)_'}\n`;
+            body += `- **New**: ${change.new}\n\n`;
+        });
+
+        body += `</details>\n\n`;
+        body += `---\n`;
+        body += `_This PR was created by the [PO Translation Tool](https://github.com/your-org/po-translation-tool)_`;
+
+        return body;
+    }
+
+    // WebSocket Management
+    connectWebSocket() {
+        const repoKey = `${this.currentRepo.owner}/${this.currentRepo.name}`;
+
+        this.ws = this.api.connectWebSocket(
+            repoKey,
+            this.currentLanguage,
+            (message) => this.handleWebSocketMessage(message),
+            (status) => this.handleWebSocketStatus(status)
+        );
+    }
+
+    disconnectWebSocket() {
+        if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+        }
+    }
+
+    handleWebSocketMessage(data) {
+        switch (data.type) {
+            case 'startEdit':
+                // Another user started editing
+                if (data.user !== this.currentUser.name) {
+                    this.updateActiveEditor(data.msgid, data.user, true);
+                }
+                break;
+
+            case 'endEdit':
+                // Another user stopped editing
+                if (data.user !== this.currentUser.name) {
+                    this.updateActiveEditor(data.msgid, data.user, false);
+                }
+                break;
+
+            case 'translationUpdate':
+                // Another user saved a translation
+                if (data.userId !== this.currentUser.id) {
+                    this.handleRemoteTranslationUpdate(data);
+                }
+                break;
+        }
+    }
+
+    handleWebSocketStatus(status) {
+        console.log('WebSocket status:', status);
+        // Could show connection status in UI
+    }
+
+    updateActiveEditor(msgid, user, isActive) {
+        const card = document.querySelector(`.translation-card[data-msgid="${msgid}"]`);
+        if (!card) return;
+
+        const data = this.translationManager.getTranslation(msgid);
+        if (!data.activeEditors) data.activeEditors = [];
+
+        if (isActive && !data.activeEditors.includes(user)) {
+            data.activeEditors.push(user);
+        } else if (!isActive) {
+            data.activeEditors = data.activeEditors.filter(u => u !== user);
+        }
+
+        // Update UI
+        const activeEditorsSpan = card.querySelector('.active-editors');
+        const statusDiv = card.querySelector('.card-status');
+
+        if (data.activeEditors.length > 0) {
+            if (activeEditorsSpan) {
+                activeEditorsSpan.textContent = `${data.activeEditors.length} editing`;
+                activeEditorsSpan.title = data.activeEditors.join(', ');
+            } else {
+                statusDiv.insertAdjacentHTML('beforeend', `
+                    <span class="active-editors" title="${data.activeEditors.join(', ')}">
+                        ${data.activeEditors.length} editing
+                    </span>
+                `);
+            }
+        } else if (activeEditorsSpan) {
+            activeEditorsSpan.remove();
+        }
+    }
+
+    handleRemoteTranslationUpdate(data) {
+        // Update local translation data
+        this.translationManager.updateTranslation(data.msgid, data.translation);
+
+        // Update UI if not currently being edited locally
+        const changeKey = `${this.currentLanguage}:${data.msgid}`;
+        if (!this.changes.has(changeKey)) {
+            const textarea = document.querySelector(`textarea[data-msgid="${data.msgid}"]`);
+            if (textarea) {
+                textarea.value = data.translation;
+            }
+        }
+    }
+
+    // Navigation
+    backToRepos() {
+        this.disconnectWebSocket();
+        this.currentRepo = null;
+        this.currentLanguage = null;
+        this.changes.clear();
+        this.loadRepositories();
+    }
+
+    backToLanguages() {
+        this.disconnectWebSocket();
+        this.currentLanguage = null;
+        this.changes.clear();
+        this.selectRepository(
+            this.currentRepo.owner,
+            this.currentRepo.name,
+            this.currentRepo.translationPath
+        );
+    }
+
+    // Utility Methods
     getLanguageName(code) {
         const names = {
             'cr': 'Cree (ᓀᐦᐃᔭᐍᐏᐣ)',
@@ -363,25 +676,32 @@ class TranslationApp {
             'miq': "Mi'kmaq",
             'innu': 'Innu-aimun',
             'fr': 'French',
-            'es': 'Spanish'
+            'es': 'Spanish',
+            'de': 'German',
+            'pt': 'Portuguese',
+            'it': 'Italian',
+            'ja': 'Japanese',
+            'ko': 'Korean',
+            'zh': 'Chinese'
         };
         return names[code] || code.toUpperCase();
     }
 
     escapeHtml(text) {
         const div = document.createElement('div');
-        div.textContent = text;
+        div.textContent = text || '';
         return div.innerHTML;
     }
 }
 
-window.addEventListener('error', (e) => {
-    console.error('Global error:', e);
-    showErrorMessage('An unexpected error occurred. Please refresh and try again.');
+// Global error handler
+window.addEventListener('error', (event) => {
+    console.error('Application error:', event.error);
+    // Could send to error tracking service
 });
 
-// Initialize the app when DOM is ready
+// Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    window.translationApp = new TranslationApp();
-    window.translationApp.init();
+    window.app = new TranslationApp();
+    window.app.init();
 });

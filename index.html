@@ -4,43 +4,128 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PO Translation Tool</title>
-    <style>
-
-    </style>
+    <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
 <div class="container">
+    <!-- Auth Section -->
     <div id="auth-section">
         <h1>🌐 PO Translation Tool</h1>
         <div class="auth-options">
             <div class="auth-option">
                 <h3>GitHub Authentication</h3>
                 <p>Use your GitHub account to directly create pull requests</p>
-                <button class="btn-github" onclick="loginWithGithub()">
+                <button class="btn-github" onclick="app.loginWithGithub()">
+                    <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: middle; margin-right: 8px;">
+                        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                    </svg>
                     Login with GitHub
                 </button>
             </div>
+
             <div class="auth-option">
                 <h3>Invite Token</h3>
                 <p>Use an invite token provided by your organization</p>
                 <input type="text" id="inviteToken" placeholder="Enter invite token">
-                <button class="btn-token" onclick="loginWithToken()">
+                <input type="email" id="tokenEmail" placeholder="Your email address">
+                <input type="text" id="tokenName" placeholder="Your name (optional)">
+                <button class="btn-token" onclick="app.loginWithToken()">
                     Login with Token
                 </button>
             </div>
         </div>
     </div>
 
-    <div id="translation-section">
-        <!-- Content will be dynamically loaded -->
+    <!-- Main Application -->
+    <div id="app-section" style="display: none;">
+        <header class="app-header">
+            <h1>PO Translation Tool</h1>
+            <div class="user-info">
+                <span id="user-name"></span>
+                <button onclick="app.logout()" class="btn-secondary">Logout</button>
+            </div>
+        </header>
+
+        <!-- Repository Selection -->
+        <div id="repo-selector" class="panel">
+            <h2>Select Repository</h2>
+            <div id="repo-list" class="repo-grid">
+                <!-- Repositories will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Language Selection -->
+        <div id="language-selector" class="panel" style="display: none;">
+            <button onclick="app.backToRepos()" class="btn-secondary">← Back to Repositories</button>
+            <h2>Select Language</h2>
+            <div id="language-list" class="language-grid">
+                <!-- Languages will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Translation Workspace -->
+        <div id="translation-workspace" style="display: none;">
+            <div class="workspace-header">
+                <div>
+                    <button onclick="app.backToLanguages()" class="btn-secondary">← Back</button>
+                    <h2 id="workspace-title">Translations</h2>
+                </div>
+                <div class="workspace-controls">
+                    <div class="change-counter">
+                        <span id="change-count">0</span> changes
+                    </div>
+                    <button onclick="app.showChanges()" class="btn-secondary">Review Changes</button>
+                    <button onclick="app.submitPR()" class="btn-primary" id="submit-pr-btn" disabled>
+                        Submit PR
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search/Filter Bar -->
+            <div class="filter-bar">
+                <input type="text" id="search-input" placeholder="Search translations..." onkeyup="app.filterTranslations()">
+                <select id="filter-status" onchange="app.filterTranslations()">
+                    <option value="all">All translations</option>
+                    <option value="empty">Missing translations</option>
+                    <option value="modified">Modified</option>
+                </select>
+            </div>
+
+            <!-- Translation Cards Container -->
+            <div id="translation-cards" class="translation-container">
+                <!-- Translation cards will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Changes Review Modal -->
+        <div id="changes-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Review Changes</h2>
+                    <button onclick="app.closeChangesModal()" class="close-btn">×</button>
+                </div>
+                <div id="changes-list" class="changes-list">
+                    <!-- Changes will be listed here -->
+                </div>
+                <div class="modal-footer">
+                    <button onclick="app.closeChangesModal()" class="btn-secondary">Close</button>
+                    <button onclick="app.proceedToSubmitPR()" class="btn-primary">Create Pull Request</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="loading-overlay" style="display: none;">
+            <div class="spinner"></div>
+            <p id="loading-text">Loading...</p>
+        </div>
     </div>
 </div>
 
-<!-- Load all scripts in order -->
-<script src="scripts/auth.js"></script>
+<!-- Scripts -->
 <script src="scripts/config.js"></script>
-<script src="scripts/changeTracker.js"></script>
-<script src="scripts/prManager.js"></script>
+<script src="scripts/api-client.js"></script>
+<script src="scripts/translation-manager.js"></script>
 <script src="scripts/app.js"></script>
 </body>
 </html>

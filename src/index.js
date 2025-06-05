@@ -4,31 +4,43 @@ import { DatabaseHelper } from './db-helper.js';
 import { AuthHandler } from './auth-handler.js';
 import { TranslationHandler } from './translation-handler.js';
 import { WebSocketHandler } from './websocket-handler.js';
-import { Toucan } from 'toucan-js';
+import { TranslationRoom } from './translation-room.js';
 
+// Export the Durable Object class
+export { TranslationRoom };
 
 const router = Router();
 
-// CORS headers for cross-origin requests
-const corsHeaders = {
-    'Access-Control-Allow-Origin': env.FRONTEND_URL || 'https://your-org.github.io',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Credentials': 'true'
-};
+// Helper function to add CORS headers
+function corsResponse(response, env) {
+    const headers = new Headers(response.headers);
+    headers.set('Access-Control-Allow-Origin', env.FRONTEND_URL || '*');
+    headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    headers.set('Access-Control-Allow-Credentials', 'true');
 
-// Middleware to add CORS headers
-const withCors = (response) => {
-    Object.entries(corsHeaders).forEach(([key, value]) => {
-        response.headers.set(key, value);
+    return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers
     });
-    return response;
-};
+}
+
+// Middleware to inject env and db into request
+async function withContext(request, env) {
+    request.env = env;
+    request.db = new DatabaseHelper(env.DB);
+    return request;
+}
 
 // Auth endpoints
 router.post('/api/auth/github', AuthHandler.githubAuth);
 router.post('/api/auth/token', AuthHandler.tokenAuth);
 router.get('/api/auth/validate', AuthHandler.validate);
+
+// Repository configuration
+router.get('/api/repositories', TranslationHandler.getRepositories);
+router.get('/api/repositories/:owner/:repo/languages', TranslationHandler.getLanguages);
 
 // Translation endpoints
 router.get('/api/translations/:repo/:language', TranslationHandler.getTranslations);
@@ -36,68 +48,67 @@ router.post('/api/translations/:repo/:language', TranslationHandler.saveTranslat
 router.get('/api/translations/changes', TranslationHandler.getPendingChanges);
 router.post('/api/translations/submit-pr', TranslationHandler.submitPR);
 
-// Repository configuration
-router.get('/api/repositories', TranslationHandler.getRepositories);
-router.get('/api/repositories/:owner/:repo/languages', TranslationHandler.getLanguages);
-
-// WebSocket for real-time collaboration
+// WebSocket endpoint
 router.get('/api/ws', async (request, env) => {
-    const roomId = request.headers.get('X-Room-Id');
-    if (!roomId) {
-        return new Response('Room ID required', { status: 400 });
+    const upgradeHeader = request.headers.get('Upgrade');
+    if (!upgradeHeader || upgradeHeader !== 'websocket') {
+        return new Response('Expected Upgrade: websocket', { status: 426 });
     }
 
+    const url = new URL(request.url);
+    const repo = url.searchParams.get('repo');
+    const language = url.searchParams.get('language');
+
+    if (!repo || !language) {
+        return new Response('Missing repo or language parameters', { status: 400 });
+    }
+
+    // Create room ID from repo and language
+    const roomId = `${repo}:${language}`;
     const id = env.TRANSLATION_ROOMS.idFromName(roomId);
     const room = env.TRANSLATION_ROOMS.get(id);
 
+    // Forward the request to the Durable Object
     return room.fetch(request);
 });
 
 // Health check
 router.get('/api/health', () => new Response('OK', { status: 200 }));
 
-// Handle OPTIONS for CORS
-router.options('*', () => new Response(null, { headers: corsHeaders }));
+// Handle OPTIONS for CORS preflight
+router.options('*', (request, env) => {
+    return corsResponse(new Response(null, { status: 204 }), env);
+});
 
 // 404 handler
 router.all('*', () => new Response('Not Found', { status: 404 }));
 
+// Main worker handler
 export default {
     async fetch(request, env, ctx) {
-        const sentry = new Toucan({
-            dsn: env.SENTRY_DSN,
-            context: ctx,
-            request,
-        });
-
         try {
-            // Initialize database helper with env binding
-            const db = new DatabaseHelper(env.DB);
+            // Add context to request
+            await withContext(request, env);
 
-            // Add env and db to request for use in handlers
-            request.env = env;
-            request.db = db;
+            // Route the request
+            const response = await router.handle(request, env, ctx);
 
-            const response = await router.handle(request);
-            return withCors(response);
+            // Add CORS headers
+            return corsResponse(response, env);
+
         } catch (error) {
-            sentry.captureException(error);
             console.error('Worker error:', error);
-            return withCors(new Response(JSON.stringify({
-                error: 'Internal Server Error',
-                message: error.message
-            }), {
-                status: 500,
-                headers: { 'Content-Type': 'application/json' }
-            }));
-        }
-    },
-    // Handle WebSocket connections
-    async webSocketMessage(ws, message) {
-        await WebSocketHandler.handleMessage(ws, message);
-    },
 
-    async webSocketClose(ws, code, reason, wasClean) {
-        await WebSocketHandler.handleClose(ws, code, reason, wasClean);
+            const errorResponse = new Response(JSON.stringify({
+                error: 'Internal Server Error',
+                message: error.message,
+                code: error.code || 'INTERNAL_ERROR'
+            }), {
+                status: error.statusCode || 500,
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            return corsResponse(errorResponse, env);
+        }
     }
 };

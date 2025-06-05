@@ -1,0 +1,32 @@
+{
+  "version": "1.0.0",
+  "defaultLanguage": "en",
+  "fallbackLanguage": "en",
+  "translationFilePattern": "messages.po",
+  "pluralRules": {
+    "cr": "nplurals=2; plural=(n != 1);",
+    "iu": "nplurals=3; plural=(n==1) ? 0 : (n==2) ? 1 : 2;",
+    "oj": "nplurals=2; plural=(n != 1);",
+    "miq": "nplurals=2; plural=(n != 1);",
+    "innu": "nplurals=2; plural=(n != 1);",
+    "fr": "nplurals=2; plural=(n > 1);",
+    "es": "nplurals=2; plural=(n != 1);",
+    "de": "nplurals=2; plural=(n != 1);"
+  },
+  "characterSets": {
+    "cr": "Unified Canadian Aboriginal Syllabics",
+    "iu": "Unified Canadian Aboriginal Syllabics",
+    "oj": "Unified Canadian Aboriginal Syllabics + Latin",
+    "miq": "Latin",
+    "innu": "Latin",
+    "default": "Latin"
+  },
+  "rtlLanguages": [],
+  "maxTranslationLength": 5000,
+  "preservePatterns": [
+    "{{.*?}}",
+    "{[0-9]+}",
+    "%[sdif]",
+    "\\$\\{.*?\\}"
+  ]
+}

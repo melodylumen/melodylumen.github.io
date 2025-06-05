@@ -1,11 +1,18 @@
 name = "gander-social-translation-tool"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
+node_compat = true
 
-# KV namespace for real-time presence
+# Environment variables
+[vars]
+FRONTEND_URL = "https://your-org.github.io"
+JWT_SECRET = "your-secret-key-here" # Change this in production!
+
+# KV namespace for session storage
 [[kv_namespaces]]
-binding = "gander-social-translations"
+binding = "gander_social_translations"
 id = "077b9a43f68c49a986cecae95ebf5f41"
+preview_id = "077b9a43f68c49a986cecae95ebf5f41" # Use same ID for local dev
 
 # D1 Database
 [[d1_databases]]
@@ -14,9 +21,26 @@ database_name = "gander-social-translation-db"
 database_id = "65d4272a-e117-4737-a94b-b7d92f1e96a2"
 
 # Durable Objects for WebSocket handling
-name = "TRANSLATION_ROOMS"
-class_name = "TranslationRoom"
+[durable_objects]
+bindings = [
+    { name = "TRANSLATION_ROOMS", class_name = "TranslationRoom", script_name = "gander-social-translation-tool" }
+]
 
+# Routes
+[[routes]]
+pattern = "gander-social-translation-tool.workers.dev/*"
+zone_name = "workers.dev"
+
+# Development settings
+[dev]
+port = 8787
+local_protocol = "http"
+
+# Build configuration
+[build]
+command = "npm install"
+
+# Migrations for Durable Objects
 [[migrations]]
-tag = "v2"
+tag = "v1"
 new_classes = ["TranslationRoom"]

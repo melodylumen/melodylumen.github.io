@@ -1,0 +1,26 @@
+{
+  "name": "po-translation-tool",
+  "version": "1.0.0",
+  "description": "Web tool for editing .po translation files",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "db:init": "wrangler d1 execute po-translation-db --file=./schema.sql --local",
+    "db:init:remote": "wrangler d1 execute po-translation-db --file=./schema.sql --remote",
+    "db:seed": "wrangler d1 execute po-translation-db --file=./seed-data.sql --local",
+    "serve": "python3 -m http.server 8000"
+  },
+  "dependencies": {
+    "itty-router": "^4.0.23",
+    "@tsndr/cloudflare-worker-jwt": "^2.2.2"
+  },
+  "devDependencies": {
+    "wrangler": "^3.22.1",
+    "vitest": "^1.1.0",
+    "@cloudflare/workers-types": "^4.20231218.0",
+    "miniflare": "^3.20231218.1"
+  }
+}

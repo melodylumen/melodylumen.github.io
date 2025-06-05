@@ -1,4 +1,3 @@
-// src/db-helper.js - Database operations for D1
 export class DatabaseHelper {
     constructor(db) {
         this.db = db;
@@ -10,8 +9,8 @@ export class DatabaseHelper {
 
         try {
             const result = await this.db.prepare(`
-                INSERT INTO users (id, email, name, github_username, auth_method)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO users (id, email, name, github_username, auth_method, created_at, last_active)
+                VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
             `).bind(id, email, name, githubUsername, authMethod).run();
 
             return { id, success: true };
@@ -37,13 +36,19 @@ export class DatabaseHelper {
         ).bind(id).first();
     }
 
+    async updateUserActivity(userId) {
+        await this.db.prepare(
+            'UPDATE users SET last_active = datetime("now") WHERE id = ?'
+        ).bind(userId).run();
+    }
+
     // Session Management
     async createSession(userId, repository, language) {
         const sessionId = crypto.randomUUID();
 
         await this.db.prepare(`
-            INSERT INTO translation_sessions (id, user_id, repository, language_code)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO translation_sessions (id, user_id, repository, language_code, started_at, last_active)
+            VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
         `).bind(sessionId, userId, repository, language).run();
 
         return sessionId;
@@ -58,31 +63,42 @@ export class DatabaseHelper {
         `).bind(userId, repository, language).first();
     }
 
+    async updateSessionActivity(sessionId) {
+        await this.db.prepare(
+            'UPDATE translation_sessions SET last_active = datetime("now") WHERE id = ?'
+        ).bind(sessionId).run();
+    }
+
     // Translation Progress
     async saveTranslation(sessionId, msgid, filePath, originalText, translatedText, previousTranslation = null) {
         const id = `${sessionId}:${msgid}`;
-        const wordCount = translatedText.split(/\s+/).length;
-        const charCount = translatedText.length;
+        const wordCount = translatedText ? translatedText.split(/\s+/).filter(w => w.length > 0).length : 0;
+        const charCount = translatedText ? translatedText.length : 0;
+        const status = translatedText && translatedText.trim() ? 'completed' : 'pending';
 
         await this.db.prepare(`
             INSERT OR REPLACE INTO translation_progress 
-      (id, session_id, msgid, file_path, original_text, translated_text, 
-       previous_translation, status, completed_at, word_count, character_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', CURRENT_TIMESTAMP, ?, ?)
+            (id, session_id, msgid, file_path, original_text, translated_text, 
+             previous_translation, status, completed_at, word_count, character_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 
+                    CASE WHEN ? = 'completed' THEN datetime('now') ELSE NULL END, ?, ?)
         `).bind(
             id, sessionId, msgid, filePath, originalText,
-            translatedText, previousTranslation, wordCount, charCount
+            translatedText, previousTranslation, status, status, wordCount, charCount
         ).run();
+
+        // Update session activity
+        await this.updateSessionActivity(sessionId);
     }
 
     async getTranslationProgress(sessionId) {
         const results = await this.db.prepare(`
             SELECT * FROM translation_progress
             WHERE session_id = ?
-            ORDER BY completed_at DESC
+            ORDER BY msgid
         `).bind(sessionId).all();
 
-        return results.results;
+        return results.results || [];
     }
 
     // Pending Changes (for PR creation)
@@ -99,7 +115,7 @@ export class DatabaseHelper {
                      JOIN users u ON ts.user_id = u.id
             WHERE ts.user_id = ?
               AND tp.status = 'completed'
-              AND tp.previous_translation != tp.translated_text
+              AND (tp.previous_translation IS NULL OR tp.previous_translation != tp.translated_text)
         `;
 
         const bindings = [userId];
@@ -112,7 +128,7 @@ export class DatabaseHelper {
         query += ' ORDER BY tp.completed_at DESC';
 
         const results = await this.db.prepare(query).bind(...bindings).all();
-        return results.results;
+        return results.results || [];
     }
 
     // Edit History
@@ -121,8 +137,8 @@ export class DatabaseHelper {
 
         await this.db.prepare(`
             INSERT INTO edit_history
-            (id, msgid, file_path, user_id, session_id, action, previous_value, new_value)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (id, msgid, file_path, user_id, session_id, action, previous_value, new_value, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         `).bind(id, msgid, filePath, userId, sessionId, action, previousValue, newValue).run();
     }
 
@@ -144,22 +160,18 @@ export class DatabaseHelper {
         bindings.push(limit);
 
         const results = await this.db.prepare(query).bind(...bindings).all();
-        return results.results;
+        return results.results || [];
     }
 
     // Active Editors (for real-time collaboration)
     async setActiveEditor(userId, msgid, filePath) {
-        const id = crypto.randomUUID();
+        const id = `${userId}:${msgid}`;
 
-        // Remove any existing active edit for this user
-        await this.db.prepare(
-            'DELETE FROM active_editors WHERE user_id = ?'
-        ).bind(userId).run();
-
-        // Add new active edit
+        // Use REPLACE to update if exists
         await this.db.prepare(`
-            INSERT INTO active_editors (id, user_id, msgid, file_path)
-            VALUES (?, ?, ?, ?)
+            INSERT OR REPLACE INTO active_editors 
+            (id, user_id, msgid, file_path, started_editing, last_heartbeat)
+            VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
         `).bind(id, userId, msgid, filePath).run();
 
         return id;
@@ -170,37 +182,45 @@ export class DatabaseHelper {
             SELECT ae.*, u.name, u.email
             FROM active_editors ae
                      JOIN users u ON ae.user_id = u.id
-            WHERE last_heartbeat > datetime('now', '-30 seconds')
+            WHERE datetime(ae.last_heartbeat) > datetime('now', '-2 minutes')
         `;
 
+        const bindings = [];
         if (msgid) {
             query += ' AND ae.msgid = ?';
-            return await this.db.prepare(query).bind(msgid).all();
+            bindings.push(msgid);
         }
 
-        const results = await this.db.prepare(query).all();
-        return results.results;
+        const results = await this.db.prepare(query).bind(...bindings).all();
+        return results.results || [];
     }
 
     async updateHeartbeat(userId) {
         await this.db.prepare(`
             UPDATE active_editors
-            SET last_heartbeat = CURRENT_TIMESTAMP
+            SET last_heartbeat = datetime('now')
             WHERE user_id = ?
         `).bind(userId).run();
+    }
+
+    async removeActiveEditor(userId, msgid) {
+        const id = `${userId}:${msgid}`;
+        await this.db.prepare(
+            'DELETE FROM active_editors WHERE id = ?'
+        ).bind(id).run();
     }
 
     async removeInactiveEditors() {
         await this.db.prepare(`
             DELETE FROM active_editors
-            WHERE last_heartbeat < datetime('now', '-60 seconds')
+            WHERE datetime(last_heartbeat) < datetime('now', '-2 minutes')
         `).run();
     }
 
     // Metrics
     async updateMetrics(userId, languageCode, translationsCompleted, wordsTranslated, charactersTranslated, timeSpentMinutes) {
         const date = new Date().toISOString().split('T')[0];
-        const id = crypto.randomUUID();
+        const id = `${userId}:${languageCode}:${date}`;
 
         await this.db.prepare(`
             INSERT INTO translation_metrics
@@ -240,7 +260,53 @@ export class DatabaseHelper {
         query += ' ORDER BY date DESC';
 
         const results = await this.db.prepare(query).bind(...bindings).all();
-        return results.results;
+        return results.results || [];
+    }
+
+    // Translation Statistics
+    async getTranslationStats() {
+        const stats = await this.db.prepare(`
+            SELECT 
+                COUNT(DISTINCT u.id) as activeUsers,
+                COUNT(DISTINCT tp.id) as total,
+                COUNT(DISTINCT CASE WHEN tp.status = 'completed' THEN tp.id END) as completed,
+                COUNT(DISTINCT ts.language_code) as languages
+            FROM translation_progress tp
+            JOIN translation_sessions ts ON tp.session_id = ts.id
+            JOIN users u ON ts.user_id = u.id
+            WHERE ts.last_active > datetime('now', '-30 days')
+        `).first();
+
+        const byLanguage = await this.db.prepare(`
+            SELECT 
+                ts.language_code,
+                COUNT(DISTINCT tp.id) as total,
+                COUNT(DISTINCT CASE WHEN tp.status = 'completed' THEN tp.id END) as completed
+            FROM translation_progress tp
+            JOIN translation_sessions ts ON tp.session_id = ts.id
+            GROUP BY ts.language_code
+        `).all();
+
+        const recentChanges = await this.db.prepare(`
+            SELECT 
+                tp.msgid,
+                tp.translated_text,
+                ts.language_code,
+                u.name as translator,
+                tp.completed_at
+            FROM translation_progress tp
+            JOIN translation_sessions ts ON tp.session_id = ts.id
+            JOIN users u ON ts.user_id = u.id
+            WHERE tp.status = 'completed'
+            ORDER BY tp.completed_at DESC
+            LIMIT 10
+        `).all();
+
+        return {
+            ...stats,
+            byLanguage: byLanguage.results || [],
+            recentChanges: recentChanges.results || []
+        };
     }
 
     // Batch operations for PR creation
@@ -248,9 +314,9 @@ export class DatabaseHelper {
         const statements = changeIds.map(id =>
             this.db.prepare(`
                 UPDATE translation_progress
-                SET status = 'submitted', pr_number = ?
+                SET status = 'submitted'
                 WHERE id = ?
-            `).bind(prNumber, id)
+            `).bind(id)
         );
 
         await this.db.batch(statements);

@@ -1,18 +1,18 @@
-// Add JWT-based sessions instead of simple UUIDs
+// src/auth-handler.js - Authentication handler
 import jwt from '@tsndr/cloudflare-worker-jwt';
 
-async function generateSessionToken(userId, authMethod, env) {
-    const token = await jwt.sign({
-        userId,
-        authMethod,
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
-    }, env.JWT_SECRET);
-
-    return token;
-}
-
 export class AuthHandler {
+    static async generateSessionToken(userId, authMethod, env) {
+        const token = await jwt.sign({
+            userId,
+            authMethod,
+            iat: Math.floor(Date.now() / 1000),
+            exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
+        }, env.JWT_SECRET || 'development-secret');
+
+        return token;
+    }
+
     static async githubAuth(request) {
         try {
             const { token } = await request.json();
@@ -28,7 +28,8 @@ export class AuthHandler {
             const githubResponse = await fetch('https://api.github.com/user', {
                 headers: {
                     'Authorization': `token ${token}`,
-                    'Accept': 'application/vnd.github.v3+json'
+                    'Accept': 'application/vnd.github.v3+json',
+                    'User-Agent': 'PO-Translation-Tool'
                 }
             });
 
@@ -50,7 +51,7 @@ export class AuthHandler {
             );
 
             // Generate session token
-            const sessionToken = generateSessionToken(user.id, 'github', request.env);
+            const sessionToken = await AuthHandler.generateSessionToken(user.id, 'github', request.env);
 
             // Store session in KV with 24 hour expiration
             await request.env.gander_social_translations.put(
@@ -104,10 +105,18 @@ export class AuthHandler {
                 });
             }
 
-            // Validate invite token against stored list
-            const validTokens = await request.env.gander_social_translations.get('valid_tokens', 'json');
+            // Get valid tokens from KV
+            let validTokens = await request.env.gander_social_translations.get('valid_tokens', 'json');
 
-            if (!validTokens || !validTokens.tokens || !validTokens.tokens.includes(inviteToken)) {
+            // Default tokens for development
+            if (!validTokens) {
+                validTokens = {
+                    tokens: ['TRANSLATOR-2024-ALPHA-001', 'DEV-TOKEN-123'],
+                    validUntil: '2025-12-31'
+                };
+            }
+
+            if (!validTokens.tokens.includes(inviteToken)) {
                 return new Response(JSON.stringify({ error: 'Invalid invite token' }), {
                     status: 401,
                     headers: { 'Content-Type': 'application/json' }
@@ -126,7 +135,7 @@ export class AuthHandler {
             const user = await request.db.createUser(email, name || email, 'token');
 
             // Generate session token
-            const sessionToken = generateSessionToken(user.id, 'token', request.env);
+            const sessionToken = await AuthHandler.generateSessionToken(user.id, 'token', request.env);
 
             // Store session in KV
             await request.env.gander_social_translations.put(
@@ -177,13 +186,28 @@ export class AuthHandler {
             }
 
             const sessionToken = authHeader.substring(7);
+
+            // First check if it's a JWT
+            const isValid = await jwt.verify(sessionToken, request.env.JWT_SECRET || 'development-secret');
+
+            if (!isValid) {
+                return new Response(JSON.stringify({ error: 'Invalid token' }), {
+                    status: 401,
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+
+            // Decode the token to get user ID
+            const payload = jwt.decode(sessionToken);
+
+            // Get session from KV
             const session = await request.env.gander_social_translations.get(
                 `session:${sessionToken}`,
                 'json'
             );
 
             if (!session) {
-                return new Response(JSON.stringify({ error: 'Invalid session' }), {
+                return new Response(JSON.stringify({ error: 'Session not found' }), {
                     status: 401,
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -236,6 +260,13 @@ export class AuthHandler {
         }
 
         const sessionToken = authHeader.substring(7);
+
+        // Verify JWT
+        const isValid = await jwt.verify(sessionToken, request.env.JWT_SECRET || 'development-secret');
+        if (!isValid) {
+            throw new Error('Invalid token');
+        }
+
         const session = await request.env.gander_social_translations.get(
             `session:${sessionToken}`,
             'json'

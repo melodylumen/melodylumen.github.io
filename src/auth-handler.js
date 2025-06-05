@@ -1,4 +1,3 @@
-// src/auth-handler.js - Authentication handler
 import jwt from '@tsndr/cloudflare-worker-jwt';
 
 export class AuthHandler {

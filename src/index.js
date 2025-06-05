@@ -1,4 +1,3 @@
-// src/index.js - Cloudflare Worker Entry Point
 import { Router } from 'itty-router';
 import { DatabaseHelper } from './db-helper.js';
 import { AuthHandler } from './auth-handler.js';

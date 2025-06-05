@@ -1,4 +1,3 @@
-// scripts/api-client.js - API client for Cloudflare Workers backend
 class APIClient {
     constructor() {
         // Use environment variable or default to local development

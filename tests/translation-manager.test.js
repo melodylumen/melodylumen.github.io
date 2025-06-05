@@ -1,4 +1,3 @@
-// tests/translation-manager.test.js
 import { describe, it, expect } from 'vitest';
 import { TranslationManager } from '../scripts/translation-manager.js';
 

@@ -1,5 +1,5 @@
 -- seed-data.sql - Test data for development
--- Clear existing data (be careful in production!)
+-- Clear existing data (only run this in a test environment - LOCALLY!)
 DELETE FROM edit_history;
 DELETE FROM active_editors;
 DELETE FROM translation_progress;

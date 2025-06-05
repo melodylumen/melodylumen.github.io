@@ -1,4 +1,3 @@
-// src/db-helper.js
 export class DatabaseHelper {
     constructor(db) {
         this.db = db;

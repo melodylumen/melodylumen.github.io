@@ -1,4 +1,3 @@
-// src/websocket-handler.js - WebSocket handling for real-time collaboration
 export class WebSocketHandler {
     static async handleUpgrade(request) {
         const url = new URL(request.url);

@@ -1,4 +1,3 @@
-// scripts/translation-manager.js - Handle translation data and PO file parsing
 class TranslationManager {
     constructor(apiClient) {
         this.api = apiClient;

@@ -1,4 +1,3 @@
-// tests/api.test.js
 import { unstable_dev } from 'wrangler';
 
 describe('API Integration', () => {

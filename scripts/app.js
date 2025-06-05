@@ -1,4 +1,3 @@
-// scripts/app.js - Main application controller
 class TranslationApp {
     constructor() {
         this.api = new APIClient();

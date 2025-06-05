@@ -1,5 +1,5 @@
 -- schema.sql
--- Drop existing tables if they exist (careful in production!)
+-- Drop existing tables if they exist (This should only be run in a test environment - LOCALLY!
 DROP TABLE IF EXISTS edit_history;
 DROP TABLE IF EXISTS active_editors;
 DROP TABLE IF EXISTS translation_progress;

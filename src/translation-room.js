@@ -1,4 +1,3 @@
-// src/translation-room.js - Durable Object for real-time collaboration
 export class TranslationRoom {
     constructor(state, env) {
         this.state = state;

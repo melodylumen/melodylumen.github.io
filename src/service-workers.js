@@ -1,4 +1,3 @@
-// service-worker.js
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open('po-tool-v1').then((cache) => {

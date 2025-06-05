@@ -228,16 +228,16 @@ const corsHeaders = {
 ### Structured Error Responses
 ```javascript
 class APIError extends Error {
-  constructor(message, statusCode = 500, code = 'INTERNAL_ERROR') {
-    super(message);
-    this.statusCode = statusCode;
-    this.code = code;
-  }
+    constructor(message, statusCode = 500, code = 'INTERNAL_ERROR') {
+        super(message);
+        this.statusCode = statusCode;
+        this.code = code;
+    }
 }
 
 // Usage
 if (!token) {
-  throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
+    throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
 }
 ```
 

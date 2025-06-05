@@ -1,0 +1,30 @@
+# openapi.yaml
+openapi: 3.0.0
+info:
+  title: PO Translation Tool API
+  version: 1.0.0
+paths:
+  /api/auth/github:
+    post:
+      summary: Authenticate with GitHub
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionToken:
+                    type: string
+                  user:
+                    type: object

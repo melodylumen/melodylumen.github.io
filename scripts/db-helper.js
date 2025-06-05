@@ -2,6 +2,25 @@
 export class DatabaseHelper {
     constructor(db) {
         this.db = db;
+        this.statements = new Map();
+    }
+
+    async prepare(key, sql) {
+        if (!this.statements.has(key)) {
+            this.statements.set(key, this.db.prepare(sql));
+        }
+        return this.statements.get(key);
+    }
+
+    async getTranslationsBatch(sessionIds) {
+        const placeholders = sessionIds.map(() => '?').join(',');
+        const stmt = await this.prepare(
+            'batch_translations',
+            `SELECT * FROM translation_progress 
+       WHERE session_id IN (${placeholders})
+       ORDER BY msgid`
+        );
+        return stmt.bind(...sessionIds).all();
     }
 
     async createUser(email, name, authMethod) {

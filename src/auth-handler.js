@@ -1,4 +1,17 @@
-// src/auth-handler.js - Handle authentication
+// Add JWT-based sessions instead of simple UUIDs
+import jwt from '@tsndr/cloudflare-worker-jwt';
+
+async function generateSessionToken(userId, authMethod, env) {
+    const token = await jwt.sign({
+        userId,
+        authMethod,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
+    }, env.JWT_SECRET);
+
+    return token;
+}
+
 export class AuthHandler {
     static async githubAuth(request) {
         try {
@@ -37,7 +50,7 @@ export class AuthHandler {
             );
 
             // Generate session token
-            const sessionToken = crypto.randomUUID();
+            const sessionToken = generateSessionToken(user.id, 'github', request.env);
 
             // Store session in KV with 24 hour expiration
             await request.env.gander_social_translations.put(
@@ -113,7 +126,7 @@ export class AuthHandler {
             const user = await request.db.createUser(email, name || email, 'token');
 
             // Generate session token
-            const sessionToken = crypto.randomUUID();
+            const sessionToken = generateSessionToken(user.id, 'token', request.env);
 
             // Store session in KV
             await request.env.gander_social_translations.put(

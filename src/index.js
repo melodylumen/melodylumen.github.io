@@ -4,14 +4,17 @@ import { DatabaseHelper } from './db-helper.js';
 import { AuthHandler } from './auth-handler.js';
 import { TranslationHandler } from './translation-handler.js';
 import { WebSocketHandler } from './websocket-handler.js';
+import { Toucan } from 'toucan-js';
+
 
 const router = Router();
 
 // CORS headers for cross-origin requests
 const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Origin': env.FRONTEND_URL || 'https://your-org.github.io',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Credentials': 'true'
 };
 
 // Middleware to add CORS headers
@@ -38,7 +41,17 @@ router.get('/api/repositories', TranslationHandler.getRepositories);
 router.get('/api/repositories/:owner/:repo/languages', TranslationHandler.getLanguages);
 
 // WebSocket for real-time collaboration
-router.get('/api/ws', WebSocketHandler.handleUpgrade);
+router.get('/api/ws', async (request, env) => {
+    const roomId = request.headers.get('X-Room-Id');
+    if (!roomId) {
+        return new Response('Room ID required', { status: 400 });
+    }
+
+    const id = env.TRANSLATION_ROOMS.idFromName(roomId);
+    const room = env.TRANSLATION_ROOMS.get(id);
+
+    return room.fetch(request);
+});
 
 // Health check
 router.get('/api/health', () => new Response('OK', { status: 200 }));
@@ -51,6 +64,12 @@ router.all('*', () => new Response('Not Found', { status: 404 }));
 
 export default {
     async fetch(request, env, ctx) {
+        const sentry = new Toucan({
+            dsn: env.SENTRY_DSN,
+            context: ctx,
+            request,
+        });
+
         try {
             // Initialize database helper with env binding
             const db = new DatabaseHelper(env.DB);
@@ -62,6 +81,7 @@ export default {
             const response = await router.handle(request);
             return withCors(response);
         } catch (error) {
+            sentry.captureException(error);
             console.error('Worker error:', error);
             return withCors(new Response(JSON.stringify({
                 error: 'Internal Server Error',
@@ -72,7 +92,6 @@ export default {
             }));
         }
     },
-
     // Handle WebSocket connections
     async webSocketMessage(ws, message) {
         await WebSocketHandler.handleMessage(ws, message);

@@ -1,12 +1,14 @@
 // src/translation-handler.js - Handle translation endpoints
+import { AuthHandler } from './auth-handler.js';
+
 export class TranslationHandler {
     static async getRepositories(request) {
         // Return configured repositories
         // In production, this could be stored in KV or D1
         const repositories = [
             {
-                owner: 'your-org',
-                name: 'gander-social',
+                owner: 'gander-foundation',
+                name: 'social-app',
                 description: 'Gander Social Application',
                 translationPath: 'src/locale/locales',
                 languages: ['cr', 'iu', 'oj', 'miq', 'innu'],

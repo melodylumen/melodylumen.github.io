@@ -2,7 +2,7 @@
 
 # Setup script for PO Translation Tool
 
-echo "🚀 Setting up PO Translation Tool..."
+echo "🚀 Setting up PO Translation Tool for Indigenous Language Support..."
 
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
@@ -35,17 +35,31 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     wrangler login
 fi
 
-# Create D1 database (local)
-echo "🗄️ Creating local D1 database..."
-wrangler d1 create gander-social-translation-db --local || true
+# Note about D1 database
+echo "🗄️ Setting up local D1 database..."
+echo "Note: For local development, D1 database is created automatically when you run queries."
 
 # Initialize database schema
 echo "📋 Initializing database schema..."
 wrangler d1 execute gander-social-translation-db --file=./schema.sql --local
 
+# Check if schema was created successfully
+if [ $? -eq 0 ]; then
+    echo "✅ Database schema created successfully"
+else
+    echo "⚠️  Database schema creation had issues, but continuing..."
+fi
+
 # Seed test data
 echo "🌱 Seeding test data..."
 wrangler d1 execute gander-social-translation-db --file=./seed-data.sql --local
+
+# Check if seed data was added successfully
+if [ $? -eq 0 ]; then
+    echo "✅ Test data seeded successfully"
+else
+    echo "⚠️  Test data seeding had issues, but continuing..."
+fi
 
 # Create .env file for local development
 echo "📝 Creating .env file..."
@@ -108,6 +122,124 @@ cat > config/test-credentials.json << EOL
 }
 EOL
 
+# Create the missing translation-handler.js if it doesn't exist
+if [ ! -f "src/translation-handler.js" ]; then
+    echo "📝 Creating translation-handler.js..."
+    cat > src/translation-handler.js << 'EOL'
+// src/translation-handler.js - Handle translation endpoints
+import { AuthHandler } from './auth-handler.js';
+
+export class TranslationHandler {
+    static async getRepositories(request) {
+        const repositories = [
+            {
+                owner: 'gander-foundation',
+                name: 'social-app',
+                description: 'Gander Social Application - Indigenous Language Support',
+                translationPath: 'src/locale/locales',
+                languages: ['cr', 'iu', 'oj', 'miq', 'innu'],
+                requiresAuth: true
+            }
+        ];
+
+        return new Response(JSON.stringify({ repositories }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
+
+    static async getLanguages(request) {
+        const languages = ['cr', 'iu', 'oj', 'miq', 'innu'];
+        return new Response(JSON.stringify({ languages }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
+
+    static async getTranslations(request) {
+        try {
+            await AuthHandler.requireAuth(request);
+
+            // For initial testing, return mock data
+            return new Response(JSON.stringify({
+                translations: {
+                    'welcome.message': {
+                        original: 'Welcome to Gander Social!',
+                        current: '',
+                        previous: null
+                    },
+                    'hello.world': {
+                        original: 'Hello, World!',
+                        current: '',
+                        previous: null
+                    }
+                }
+            }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        } catch (error) {
+            return new Response(JSON.stringify({ error: error.message }), {
+                status: 401,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+    }
+
+    static async saveTranslation(request) {
+        try {
+            await AuthHandler.requireAuth(request);
+            const data = await request.json();
+            console.log('Saving translation:', data);
+
+            return new Response(JSON.stringify({ success: true }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        } catch (error) {
+            return new Response(JSON.stringify({ error: error.message }), {
+                status: 401,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+    }
+
+    static async getPendingChanges(request) {
+        try {
+            await AuthHandler.requireAuth(request);
+            return new Response(JSON.stringify({ changes: [] }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        } catch (error) {
+            return new Response(JSON.stringify({ error: error.message }), {
+                status: 401,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+    }
+
+    static async submitPR(request) {
+        try {
+            await AuthHandler.requireAuth(request);
+            return new Response(JSON.stringify({
+                success: true,
+                message: 'PR creation simulated in test mode'
+            }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        } catch (error) {
+            return new Response(JSON.stringify({ error: error.message }), {
+                status: 401,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+    }
+}
+EOL
+fi
+
 echo "✅ Setup complete!"
 echo ""
 echo "📋 Next steps:"
@@ -117,9 +249,12 @@ echo "3. Login with:"
 echo "   - Invite token: DEV-TOKEN-123"
 echo "   - Or use a GitHub Personal Access Token"
 echo ""
-echo "🧪 For testing:"
-echo "- Run 'npm test' to run unit tests"
-echo "- Check 'config/test-credentials.json' for test tokens"
+echo "🪶 Indigenous Language Support:"
+echo "- Cree (cr)"
+echo "- Inuktitut (iu)"
+echo "- Ojibwe (oj)"
+echo "- Mi'kmaq (miq)"
+echo "- Innu-aimun (innu)"
 echo ""
 echo "📚 Documentation:"
 echo "- See docs/ folder for detailed guides"

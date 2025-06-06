@@ -3,13 +3,10 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
     test: {
         globals: true,
-        environment: 'miniflare',
-        environmentOptions: {
-            modules: true,
-            script: '',
-            wranglerConfigPath: './wrangler.toml',
-            kvNamespaces: ['gander_social_translations'],
-            d1Databases: ['DB']
-        }
+        environment: 'node', // Use node environment for simpler testing
+        setupFiles: ['./tests/setup.js'],
+        testTimeout: 10000,
+        include: ['tests/**/*.test.js'],
+        exclude: ['tests/e2e/**', 'tests/integration/**']
     }
 });

@@ -16,13 +16,12 @@
     "start-dev": "bash start-dev.sh"
   },
   "dependencies": {
-    "itty-router": "^4.0.23",
-    "@tsndr/cloudflare-worker-jwt": "^2.2.2"
+    "@tsndr/cloudflare-worker-jwt": "^2.2.2",
+    "itty-router": "^4.0.23"
   },
   "devDependencies": {
-    "wrangler": "^3.22.1",
-    "vitest": "^1.1.0",
     "@cloudflare/workers-types": "^4.20231218.0",
-    "miniflare": "^3.20231218.1"
+    "vitest": "^1.1.0",
+    "wrangler": "^3.22.1"
   }
 }

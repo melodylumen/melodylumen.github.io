@@ -1,3 +1,4 @@
+// scripts/api-client.js - Updated with dynamic language support
 class APIClient {
     constructor() {
         // Use environment variable or default to local development
@@ -42,7 +43,7 @@ class APIClient {
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({ error: 'Request failed' }));
-            throw new Error(error.error || error.message || 'Request failed');
+            throw new Error(error.error?.message || error.error || error.message || 'Request failed');
         }
 
         return response.json();
@@ -105,40 +106,44 @@ class APIClient {
 
     // Repository operations
     async getRepositories() {
-        // Get from worker config
-        const config = await this.request('/repositories');
-        return config.repositories;
+        const result = await this.request('/repositories');
+        return result.data?.repositories || result.repositories || [];
     }
 
     async getRepositoryLanguages(owner, repo) {
-        // First check if we have GitHub access
-        if (this.githubToken) {
-            // Get languages from the actual repository
-            const path = `${owner}/${repo}`;
-            const repoConfig = await this.request(`/repositories/${owner}/${repo}/languages`);
+        const result = await this.request(`/repositories/${owner}/${repo}/languages`);
+        return result.data || result;
+    }
 
-            if (repoConfig.useGithub) {
-                const contents = await this.githubRequest(
-                    `/repos/${owner}/${repo}/contents/${repoConfig.translationPath}`
-                );
+    // Language operations
+    async createLanguage(repository, languageCode, languageName, sourceLanguage = 'en') {
+        const result = await this.request('/languages', {
+            method: 'POST',
+            body: JSON.stringify({
+                repository,
+                languageCode,
+                languageName,
+                sourceLanguage
+            })
+        });
 
-                return contents
-                    .filter(item => item.type === 'dir' && item.name !== 'en')
-                    .map(item => item.name);
-            }
+        if (result.success && result.data) {
+            // Store language name locally for quick access
+            localStorage.setItem(`lang_name_${languageCode}`, `${languageName} (${languageCode})`);
+            return result.data;
         }
 
-        // Fallback to configured languages
-        return this.request(`/repositories/${owner}/${repo}/languages`);
+        return result;
     }
 
     // Translation operations
     async getTranslations(repo, language) {
-        return this.request(`/translations/${repo}/${language}`);
+        const result = await this.request(`/translations/${repo}/${language}`);
+        return result.data || result;
     }
 
     async saveTranslation(repo, language, msgid, translation, metadata = {}) {
-        return this.request(`/translations/${repo}/${language}`, {
+        const result = await this.request(`/translations/${repo}/${language}`, {
             method: 'POST',
             body: JSON.stringify({
                 msgid,
@@ -146,15 +151,17 @@ class APIClient {
                 ...metadata
             })
         });
+        return result.data || result;
     }
 
     async getPendingChanges(repo = null) {
         const query = repo ? `?repo=${repo}` : '';
-        return this.request(`/translations/changes${query}`);
+        const result = await this.request(`/translations/changes${query}`);
+        return result.data || result;
     }
 
     async submitPR(repo, title, description, changes) {
-        return this.request('/translations/submit-pr', {
+        const result = await this.request('/translations/submit-pr', {
             method: 'POST',
             body: JSON.stringify({
                 repository: repo,
@@ -164,6 +171,7 @@ class APIClient {
                 useGithubAction: !this.githubToken // Use GitHub Action if no direct token
             })
         });
+        return result.data || result;
     }
 
     // File operations (for GitHub users)
@@ -247,7 +255,15 @@ class APIClient {
     // WebSocket for real-time collaboration
     connectWebSocket(repo, language, onMessage, onStatusChange) {
         const wsUrl = this.baseURL.replace('https://', 'wss://').replace('http://', 'ws://');
-        const ws = new WebSocket(`${wsUrl}/api/ws?repo=${repo}&language=${language}&token=${this.sessionToken}`);
+        const params = new URLSearchParams({
+            repo,
+            language,
+            sessionId: this.sessionToken,
+            userId: this.userId || 'unknown',
+            userName: this.userName || 'Unknown User'
+        });
+
+        const ws = new WebSocket(`${wsUrl}/api/ws?${params}`);
 
         ws.onopen = () => {
             console.log('WebSocket connected');
@@ -255,8 +271,12 @@ class APIClient {
         };
 
         ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            onMessage && onMessage(data);
+            try {
+                const data = JSON.parse(event.data);
+                onMessage && onMessage(data);
+            } catch (error) {
+                console.error('Error parsing WebSocket message:', error);
+            }
         };
 
         ws.onerror = (error) => {
@@ -267,6 +287,25 @@ class APIClient {
         ws.onclose = () => {
             console.log('WebSocket disconnected');
             onStatusChange && onStatusChange('disconnected');
+        };
+
+        // Send periodic heartbeat to keep connection alive
+        const heartbeat = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'ping' }));
+            } else {
+                clearInterval(heartbeat);
+            }
+        }, 30000); // Every 30 seconds
+
+        // Store heartbeat interval on ws object for cleanup
+        ws._heartbeat = heartbeat;
+
+        // Override close to cleanup heartbeat
+        const originalClose = ws.close.bind(ws);
+        ws.close = function(...args) {
+            clearInterval(ws._heartbeat);
+            originalClose(...args);
         };
 
         return ws;

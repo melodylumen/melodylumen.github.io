@@ -1,4 +1,4 @@
-# This workflow processes translation submissions from Cloudflare Workers
+# .github/workflows/process-translations.yml - Updated with branch management
 name: Process Translation Submissions
 
 on:
@@ -57,18 +57,29 @@ jobs:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_PATH: ${{ github.event_path }}
 
-      # Step 5: Create feature branch
-      - name: Create feature branch
-        id: branch
+      # Step 5: Check if target branch exists
+      - name: Check target branch
+        id: check_branch
         run: |
-          # Generate branch name
-          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-          BRANCH_NAME="translations/update-${TIMESTAMP}"
-          echo "branch_name=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+          TARGET_BRANCH="${{ steps.process.outputs.target_branch }}"
           
-          # Create and checkout new branch
-          git checkout -b $BRANCH_NAME
-          
+          # Check if branch exists on remote
+          if git ls-remote --heads origin "$TARGET_BRANCH" | grep -q "$TARGET_BRANCH"; then
+            echo "Branch exists, checking out"
+            git fetch origin "$TARGET_BRANCH"
+            git checkout "$TARGET_BRANCH"
+            git pull origin "$TARGET_BRANCH"
+            echo "branch_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Creating new branch"
+            git checkout -b "$TARGET_BRANCH"
+            echo "branch_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      # Step 6: Add and commit changes
+      - name: Commit changes
+        id: commit
+        run: |
           # Add changed files
           git add -A
           
@@ -78,6 +89,7 @@ jobs:
             echo "has_changes=false" >> $GITHUB_OUTPUT
           else
             echo "has_changes=true" >> $GITHUB_OUTPUT
+          
             # Commit changes
             git commit -m "Update translations: ${{ steps.process.outputs.languages }}
           
@@ -87,39 +99,85 @@ jobs:
             Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           
             # Push the branch
-            git push origin $BRANCH_NAME
+            git push origin "${{ steps.process.outputs.target_branch }}"
           fi
 
-      # Step 6: Create Pull Request
-      - name: Create Pull Request
-        if: steps.branch.outputs.has_changes == 'true'
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ steps.branch.outputs.branch_name }}
-          title: "${{ steps.process.outputs.pr_title }}"
-          body: "${{ steps.process.outputs.pr_body }}"
-          labels: |
-            translations
-            automated
-            needs-review
-          reviewers: |
-            translation-reviewers
-            ${{ github.repository_owner }}
-
-      # Step 7: Notify completion (optional)
-      - name: Send notification
-        if: steps.branch.outputs.has_changes == 'true' && env.SLACK_WEBHOOK
+      # Step 7: Check for existing PR
+      - name: Check for existing PR
+        id: check_pr
+        if: steps.commit.outputs.has_changes == 'true'
         run: |
+          # Check if PR already exists for this branch
+          EXISTING_PR=$(gh pr list --base main --head "${{ steps.process.outputs.target_branch }}" --json number --jq '.[0].number' || echo "")
+          
+          if [ -n "$EXISTING_PR" ]; then
+            echo "pr_exists=true" >> $GITHUB_OUTPUT
+            echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
+          else
+            echo "pr_exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 8: Create or update Pull Request
+      - name: Create Pull Request
+        if: steps.commit.outputs.has_changes == 'true' && steps.check_pr.outputs.pr_exists != 'true'
+        id: create_pr
+        run: |
+          PR_URL=$(gh pr create \
+            --title "${{ steps.process.outputs.pr_title }}" \
+            --body "${{ steps.process.outputs.pr_body }}" \
+            --base main \
+            --head "${{ steps.process.outputs.target_branch }}" \
+            --label "translations,automated,needs-review")
+          
+          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+          
+          # Extract PR number from URL
+          PR_NUMBER=$(echo "$PR_URL" | grep -o '[0-9]*$')
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 9: Update existing PR
+      - name: Update existing PR
+        if: steps.commit.outputs.has_changes == 'true' && steps.check_pr.outputs.pr_exists == 'true'
+        run: |
+          # Add a comment to the existing PR
+          gh pr comment ${{ steps.check_pr.outputs.pr_number }} \
+            --body "## 🔄 Updated with new translations
+
+            This PR has been updated with additional translation changes.
+          
+            **Latest Update:**
+            - Languages: ${{ steps.process.outputs.languages }}
+            - Changes: ${{ steps.process.outputs.translation_count }}
+            - Translator: ${{ steps.process.outputs.translator_name }}
+            - Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 10: Notify completion (optional)
+      - name: Send notification
+        if: steps.commit.outputs.has_changes == 'true' && env.SLACK_WEBHOOK
+        run: |
+          if [ "${{ steps.check_pr.outputs.pr_exists }}" == "true" ]; then
+            ACTION="Updated"
+            PR_URL="https://github.com/${{ github.repository }}/pull/${{ steps.check_pr.outputs.pr_number }}"
+          else
+            ACTION="Created"
+            PR_URL="${{ steps.create_pr.outputs.pr_url }}"
+          fi
+          
           curl -X POST ${{ secrets.SLACK_WEBHOOK }} \
             -H 'Content-Type: application/json' \
             -d '{
-              "text": "New translation PR created!",
+              "text": "Translation PR '"$ACTION"'!",
               "blocks": [{
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*New Translation PR Created*\n• Languages: ${{ steps.process.outputs.languages }}\n• Changes: ${{ steps.process.outputs.translation_count }}\n• Translator: ${{ steps.process.outputs.translator_name }}"
+                  "text": "*Translation PR '"$ACTION"'*\n• Languages: ${{ steps.process.outputs.languages }}\n• Changes: ${{ steps.process.outputs.translation_count }}\n• Translator: ${{ steps.process.outputs.translator_name }}\n• <'"$PR_URL"'|View PR>"
                 }
               }]
             }'

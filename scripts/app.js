@@ -1,3 +1,4 @@
+// scripts/app.js - Updated with dynamic language detection and creation
 class TranslationApp {
     constructor() {
         this.api = new APIClient();
@@ -5,6 +6,8 @@ class TranslationApp {
         this.currentUser = null;
         this.currentRepo = null;
         this.currentLanguage = null;
+        this.availableLanguages = [];
+        this.canCreateLanguage = false;
         this.ws = null;
         this.changes = new Map();
     }
@@ -126,7 +129,6 @@ class TranslationApp {
                     <p>${repo.description || 'No description available'}</p>
                     <div class="repo-meta">
                         <span>Path: ${repo.translationPath}</span>
-                        <span>${repo.languages.length} languages</span>
                     </div>
                 </div>
             `).join('');
@@ -146,20 +148,140 @@ class TranslationApp {
 
         try {
             this.showLoading('Loading languages...');
-            const languages = await this.api.getRepositoryLanguages(owner, name);
+            const response = await this.api.getRepositoryLanguages(owner, name);
 
-            const languageList = document.getElementById('language-list');
-            languageList.innerHTML = languages.map(lang => `
-                <button class="language-btn" onclick="app.selectLanguage('${lang}')">
-                    <span class="lang-code">${lang.toUpperCase()}</span>
-                    <span class="lang-name">${this.getLanguageName(lang)}</span>
-                </button>
-            `).join('');
+            this.availableLanguages = response.languages || [];
+            this.canCreateLanguage = response.canCreateNew || false;
+
+            this.renderLanguageSelector();
 
             document.getElementById('repo-selector').style.display = 'none';
             document.getElementById('language-selector').style.display = 'block';
         } catch (error) {
             alert(`Failed to load languages: ${error.message}`);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    renderLanguageSelector() {
+        const languageList = document.getElementById('language-list');
+
+        // Add existing languages
+        let html = this.availableLanguages.map(lang => `
+            <button class="language-btn" onclick="app.selectLanguage('${lang}')">
+                <span class="lang-code">${lang.toUpperCase()}</span>
+                <span class="lang-name">${this.getLanguageName(lang)}</span>
+            </button>
+        `).join('');
+
+        // Add create new language button if user has permission
+        if (this.canCreateLanguage) {
+            html += `
+                <button class="language-btn create-new" onclick="app.showCreateLanguageDialog()">
+                    <span class="lang-code">+</span>
+                    <span class="lang-name">Create New Language</span>
+                </button>
+            `;
+        }
+
+        languageList.innerHTML = html;
+    }
+
+    async showCreateLanguageDialog() {
+        // Create modal dialog
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Create New Language</h2>
+                    <button onclick="this.closest('.modal').remove()" class="close-btn">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="new-lang-code">Language Code (e.g., 'fr', 'es', 'de'):</label>
+                        <input type="text" id="new-lang-code" placeholder="e.g., fr" maxlength="10" />
+                        <small>Use standard ISO 639-1 or 639-3 codes when possible</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="new-lang-name">Language Name:</label>
+                        <input type="text" id="new-lang-name" placeholder="e.g., French" />
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="source-lang">Copy translations from:</label>
+                        <select id="source-lang">
+                            <option value="en">English (source)</option>
+                            ${this.availableLanguages.map(lang =>
+            `<option value="${lang}">${this.getLanguageName(lang)} (${lang})</option>`
+        ).join('')}
+                        </select>
+                        <small>Usually you want to copy from English to get all message IDs</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button onclick="this.closest('.modal').remove()" class="btn-secondary">Cancel</button>
+                    <button onclick="app.createNewLanguage()" class="btn-primary">Create Language</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        modal.style.display = 'flex';
+
+        // Focus on language code input
+        document.getElementById('new-lang-code').focus();
+    }
+
+    async createNewLanguage() {
+        const langCode = document.getElementById('new-lang-code').value.trim().toLowerCase();
+        const langName = document.getElementById('new-lang-name').value.trim();
+        const sourceLanguage = document.getElementById('source-lang').value;
+
+        if (!langCode || !langName) {
+            alert('Please enter both language code and name');
+            return;
+        }
+
+        // Validate language code format
+        if (!/^[a-z]{2,10}(-[A-Za-z0-9]+)?$/.test(langCode)) {
+            alert('Invalid language code format. Use 2-10 lowercase letters, optionally followed by a hyphen and alphanumeric characters.');
+            return;
+        }
+
+        // Check if language already exists
+        if (this.availableLanguages.includes(langCode)) {
+            alert('This language already exists');
+            return;
+        }
+
+        try {
+            this.showLoading('Creating new language...');
+
+            const result = await this.api.createLanguage(
+                `${this.currentRepo.owner}/${this.currentRepo.name}`,
+                langCode,
+                langName,
+                sourceLanguage
+            );
+
+            if (result.languageCode) {
+                alert(`Language "${langName}" (${langCode}) created successfully!`);
+
+                // Close modal
+                document.querySelector('.modal').remove();
+
+                // Refresh language list
+                await this.selectRepository(
+                    this.currentRepo.owner,
+                    this.currentRepo.name,
+                    this.currentRepo.translationPath
+                );
+            }
+        } catch (error) {
+            alert(`Failed to create language: ${error.message}`);
         } finally {
             this.hideLoading();
         }
@@ -493,15 +615,29 @@ class TranslationApp {
             const result = await this.api.submitPR(
                 repoKey,
                 title,
-                this.generatePRBody(description, changesArray),
+                description,
                 changesArray
             );
 
             if (result.success) {
-                alert(`Pull request created successfully!${result.prUrl ? `\n\nView at: ${result.prUrl}` : ''}`);
+                if (result.prs) {
+                    // Multiple PRs created (one per language)
+                    let message = 'Pull requests created successfully!\n\n';
+                    result.prs.forEach(pr => {
+                        message += `${pr.updated ? 'Updated' : 'Created'}: ${pr.prUrl}\n`;
+                    });
+                    alert(message);
 
-                if (result.prUrl) {
-                    window.open(result.prUrl, '_blank');
+                    // Open first PR in new tab
+                    if (result.prs[0].prUrl) {
+                        window.open(result.prs[0].prUrl, '_blank');
+                    }
+                } else {
+                    alert(`Pull request created successfully!${result.prUrl ? `\n\nView at: ${result.prUrl}` : ''}`);
+
+                    if (result.prUrl) {
+                        window.open(result.prUrl, '_blank');
+                    }
                 }
 
                 // Clear changes
@@ -518,36 +654,6 @@ class TranslationApp {
         } finally {
             this.hideLoading();
         }
-    }
-
-    generatePRBody(description, changes) {
-        let body = description ? `${description}\n\n` : '';
-
-        body += `## Translation Changes\n\n`;
-        body += `This PR updates ${changes.length} translation${changes.length > 1 ? 's' : ''} `;
-        body += `for ${this.getLanguageName(this.currentLanguage)}.\n\n`;
-
-        body += `### Summary\n\n`;
-        body += `- **Repository**: ${this.currentRepo.owner}/${this.currentRepo.name}\n`;
-        body += `- **Language**: ${this.getLanguageName(this.currentLanguage)} (${this.currentLanguage})\n`;
-        body += `- **Translator**: ${this.currentUser.name}\n`;
-        body += `- **Changes**: ${changes.length}\n\n`;
-
-        body += `### Detailed Changes\n\n`;
-        body += `<details>\n<summary>Click to expand</summary>\n\n`;
-
-        changes.forEach(change => {
-            body += `#### \`${change.msgid}\`\n`;
-            body += `- **Original (English)**: ${change.original}\n`;
-            body += `- **Previous**: ${change.previous || '_(empty)_'}\n`;
-            body += `- **New**: ${change.new}\n\n`;
-        });
-
-        body += `</details>\n\n`;
-        body += `---\n`;
-        body += `_This PR was created by the [PO Translation Tool](https://github.com/your-org/po-translation-tool)_`;
-
-        return body;
     }
 
     // WebSocket Management
@@ -668,6 +774,13 @@ class TranslationApp {
 
     // Utility Methods
     getLanguageName(code) {
+        // First check stored language metadata
+        const storedName = localStorage.getItem(`lang_name_${code}`);
+        if (storedName) {
+            return storedName;
+        }
+
+        // Fallback to known languages
         const names = {
             'cr': 'Cree (ᓀᐦᐃᔭᐍᐏᐣ)',
             'iu': 'Inuktitut (ᐃᓄᒃᑎᑐᑦ)',
@@ -681,7 +794,8 @@ class TranslationApp {
             'it': 'Italian',
             'ja': 'Japanese',
             'ko': 'Korean',
-            'zh': 'Chinese'
+            'zh': 'Chinese',
+            'en': 'English'
         };
         return names[code] || code.toUpperCase();
     }

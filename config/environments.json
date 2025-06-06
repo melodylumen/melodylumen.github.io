@@ -1,0 +1,96 @@
+{
+  "development": {
+    "workerUrl": "http://localhost:8787",
+    "frontendUrl": "http://localhost:8000",
+    "database": {
+      "name": "gander-social-translation-db",
+      "local": true
+    },
+    "kv": {
+      "namespace": "gander_social_translations",
+      "preview": true
+    },
+    "features": {
+      "realTimeCollaboration": true,
+      "languageCreation": true,
+      "autoSave": true,
+      "progressTracking": true,
+      "debugMode": true
+    },
+    "auth": {
+      "jwtSecret": "development-secret-change-in-production",
+      "sessionTimeout": 86400,
+      "testTokens": ["DEV-TOKEN-123", "DEV-TOKEN-456"]
+    }
+  },
+
+  "staging": {
+    "workerUrl": "https://po-tool-staging.workers.dev",
+    "frontendUrl": "https://staging.gander-foundation.github.io",
+    "database": {
+      "name": "gander-social-translation-db-staging",
+      "local": false
+    },
+    "kv": {
+      "namespace": "gander_social_translations_staging",
+      "preview": false
+    },
+    "features": {
+      "realTimeCollaboration": true,
+      "languageCreation": true,
+      "autoSave": true,
+      "progressTracking": true,
+      "debugMode": true
+    },
+    "auth": {
+      "sessionTimeout": 86400,
+      "testTokens": ["STAGING-TOKEN-001", "STAGING-TOKEN-002"]
+    }
+  },
+
+  "production": {
+    "workerUrl": "https://gander-social-translation-tool.workers.dev",
+    "frontendUrl": "https://gander-foundation.github.io/po-translation-tool",
+    "database": {
+      "name": "gander-social-translation-db",
+      "local": false
+    },
+    "kv": {
+      "namespace": "gander_social_translations",
+      "preview": false
+    },
+    "features": {
+      "realTimeCollaboration": true,
+      "languageCreation": true,
+      "autoSave": true,
+      "progressTracking": true,
+      "debugMode": false
+    },
+    "auth": {
+      "sessionTimeout": 86400,
+      "requireHttps": true
+    },
+    "security": {
+      "rateLimits": {
+        "auth": {
+          "requests": 10,
+          "window": 300
+        },
+        "api": {
+          "requests": 1000,
+          "window": 3600
+        },
+        "pr": {
+          "requests": 10,
+          "window": 3600
+        }
+      },
+      "cors": {
+        "allowedOrigins": [
+          "https://gander-foundation.github.io",
+          "https://gander.social"
+        ]
+      }
+    }
+  }
+}

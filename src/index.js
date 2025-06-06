@@ -1,3 +1,4 @@
+// src/index.js - Updated with language creation route
 import { Router } from 'itty-router';
 import { DatabaseHelper } from './db-helper.js';
 import { AuthHandler } from './auth-handler.js';
@@ -40,6 +41,9 @@ router.get('/api/auth/validate', AuthHandler.validate);
 // Repository configuration
 router.get('/api/repositories', TranslationHandler.getRepositories);
 router.get('/api/repositories/:owner/:repo/languages', TranslationHandler.getLanguages);
+
+// Language management
+router.post('/api/languages', TranslationHandler.createLanguage);
 
 // Translation endpoints
 router.get('/api/translations/:repo/:language', TranslationHandler.getTranslations);

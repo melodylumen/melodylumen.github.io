@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-
+// This script processes translation files for a GitHub repository.
 const fs = require('fs').promises;
 const path = require('path');
 
@@ -19,7 +19,7 @@ async function processTranslations() {
 
         if (translationFile === 'auto') {
             const queueDir = path.join(process.cwd(), 'translations-queue');
-            const files = await fs.readdir(queueDir);
+            const files = await fs.readdir(queueDir).catch(() => []);
             const jsonFiles = files.filter(f => f.endsWith('.json'));
 
             if (jsonFiles.length === 0) {
@@ -50,8 +50,9 @@ async function processTranslations() {
     console.log(`::set-output name=translation_count::${summary.translationCount}`);
     console.log(`::set-output name=translator_name::${payload.translator.name}`);
     console.log(`::set-output name=translator_email::${payload.translator.email}`);
-    console.log(`::set-output name=pr_title::${payload.title}`);
+    console.log(`::set-output name=pr_title::${payload.title || generatePRTitle(languages)}`);
     console.log(`::set-output name=pr_body::${generatePRBody(payload)}`);
+    console.log(`::set-output name=target_branch::${summary.targetBranch}`);
 
     console.log('Translation processing complete');
 }
@@ -61,9 +62,13 @@ async function applyTranslations(payload) {
 
     // Group changes by language and file
     const changesByFile = new Map();
+    const languages = new Set();
 
     changes.forEach(change => {
-        const filePath = change.filePath || `src/locale/locales/${change.language}/messages.po`;
+        const language = change.language;
+        languages.add(language);
+
+        const filePath = change.filePath || `src/locale/locales/${language}/messages.po`;
 
         if (!changesByFile.has(filePath)) {
             changesByFile.set(filePath, []);
@@ -87,7 +92,8 @@ async function applyTranslations(payload) {
             poContent = await fs.readFile(fullPath, 'utf8');
         } catch (error) {
             // File doesn't exist, create a new one
-            poContent = generateNewPoFile(path.basename(path.dirname(fullPath)));
+            const language = path.basename(path.dirname(fullPath));
+            poContent = generateNewPoFile(language);
         }
 
         // Apply changes
@@ -100,10 +106,16 @@ async function applyTranslations(payload) {
         totalTranslations += fileChanges.length;
     }
 
+    // Determine target branch
+    const today = new Date().toISOString().split('T')[0];
+    const primaryLanguage = [...languages][0];
+    const targetBranch = `language-update-${primaryLanguage}-${today}`;
+
     return {
         filesModified,
         translationCount: totalTranslations,
-        details: `Updated ${totalTranslations} translations across ${filesModified} files`
+        details: `Updated ${totalTranslations} translations across ${filesModified} files`,
+        targetBranch
     };
 }
 
@@ -158,6 +170,10 @@ msgstr ""
 `;
 }
 
+function generatePRTitle(languages) {
+    return `Update ${languages} translations`;
+}
+
 function generatePRBody(payload) {
     const { title, description, changes, translator, timestamp } = payload;
 
@@ -170,7 +186,7 @@ function generatePRBody(payload) {
         changesByLanguage.get(change.language).push(change);
     });
 
-    let body = `## ${title}\n\n`;
+    let body = `## ${title || 'Translation Update'}\n\n`;
 
     if (description) {
         body += `${description}\n\n`;
@@ -198,7 +214,7 @@ function generatePRBody(payload) {
     });
 
     body += `---\n`;
-    body += `_This PR was automatically created by the [PO Translation Tool](https://github.com/your-org/po-translation-tool) via Cloudflare Workers_`;
+    body += `_This PR was automatically created by the [PO Translation Tool](https://github.com/gander-foundation/po-translation-tool) via GitHub Actions_`;
 
     return body;
 }

@@ -1,3 +1,4 @@
+// scripts/config.js - Updated to support dynamic languages
 window.CONFIG = {
     // API endpoint - can be overridden by environment
     API_BASE_URL: window.WORKER_URL || 'https://gander-social-translation-tool.workers.dev',
@@ -5,18 +6,6 @@ window.CONFIG = {
     // GitHub API configuration
     GITHUB_API_BASE: 'https://api.github.com',
     GITHUB_SCOPES: ['repo'],
-
-    // Supported languages with native names
-    SUPPORTED_LANGUAGES: {
-        'cr': { name: 'Cree', nativeName: 'ᓀᐦᐃᔭᐍᐏᐣ' },
-        'iu': { name: 'Inuktitut', nativeName: 'ᐃᓄᒃᑎᑐᑦ' },
-        'oj': { name: 'Ojibwe', nativeName: 'ᐊᓂᔑᓈᐯᒧᐎᓐ' },
-        'miq': { name: "Mi'kmaq", nativeName: "Mi'kmawi'simk" },
-        'innu': { name: 'Innu-aimun', nativeName: 'Innu-aimun' },
-        'fr': { name: 'French', nativeName: 'Français' },
-        'es': { name: 'Spanish', nativeName: 'Español' },
-        'de': { name: 'German', nativeName: 'Deutsch' }
-    },
 
     // Auto-save configuration
     AUTO_SAVE_INTERVAL: 30000, // 30 seconds
@@ -35,6 +24,52 @@ window.CONFIG = {
         REAL_TIME_COLLABORATION: true,
         AUTO_SAVE: true,
         PROGRESS_TRACKING: true,
-        OFFLINE_MODE: false // Not yet implemented
+        OFFLINE_MODE: false, // Not yet implemented
+        LANGUAGE_CREATION: true // New feature flag
+    },
+
+    // Known language names (will be supplemented by dynamic data)
+    LANGUAGE_NAMES: {
+        // Indigenous languages
+        'cr': 'Cree (ᓀᐦᐃᔭᐍᐏᐣ)',
+        'iu': 'Inuktitut (ᐃᓄᒃᑎᑐᑦ)',
+        'oj': 'Ojibwe (ᐊᓂᔑᓈᐯᒧᐎᓐ)',
+        'miq': "Mi'kmaq",
+        'innu': 'Innu-aimun',
+
+        // Common languages
+        'en': 'English',
+        'fr': 'French',
+        'es': 'Spanish',
+        'de': 'German',
+        'pt': 'Portuguese',
+        'it': 'Italian',
+        'nl': 'Dutch',
+        'pl': 'Polish',
+        'ru': 'Russian',
+        'ja': 'Japanese',
+        'ko': 'Korean',
+        'zh': 'Chinese',
+        'ar': 'Arabic',
+        'hi': 'Hindi',
+        'bn': 'Bengali',
+        'ur': 'Urdu',
+        'tr': 'Turkish',
+        'vi': 'Vietnamese',
+        'th': 'Thai',
+        'id': 'Indonesian',
+        'ms': 'Malay',
+        'sv': 'Swedish',
+        'no': 'Norwegian',
+        'da': 'Danish',
+        'fi': 'Finnish',
+        'el': 'Greek',
+        'he': 'Hebrew',
+        'cs': 'Czech',
+        'sk': 'Slovak',
+        'hu': 'Hungarian',
+        'ro': 'Romanian',
+        'bg': 'Bulgarian',
+        'uk': 'Ukrainian'
     }
 };

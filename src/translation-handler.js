@@ -1,5 +1,80 @@
 import { AuthHandler } from './auth-handler.js';
-import { Octokit } from '@octokit/rest';
+
+class GitHubAPI {
+    constructor(token) {
+        this.token = token;
+        this.baseURL = 'https://api.github.com';
+    }
+
+    async request(method, path, body = null) {
+        const response = await fetch(`${this.baseURL}${path}`, {
+            method,
+            headers: {
+                'Authorization': `token ${this.token}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'Content-Type': 'application/json',
+                'User-Agent': 'PO-Translation-Tool'
+            },
+            body: body ? JSON.stringify(body) : null
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`GitHub API error: ${response.statusText} - ${error}`);
+        }
+
+        return response.json();
+    }
+
+    // Repository methods
+    async getRepo(owner, repo) {
+        return this.request('GET', `/repos/${owner}/${repo}`);
+    }
+
+    async getRef(owner, repo, ref) {
+        return this.request('GET', `/repos/${owner}/${repo}/git/refs/${ref}`);
+    }
+
+    async createRef(owner, repo, ref, sha) {
+        return this.request('POST', `/repos/${owner}/${repo}/git/refs`, {
+            ref: `refs/heads/${ref}`,
+            sha
+        });
+    }
+
+    async getContent(owner, repo, path, ref) {
+        try {
+            return await this.request('GET', `/repos/${owner}/${repo}/contents/${path}?ref=${ref}`);
+        } catch (error) {
+            // File doesn't exist
+            return null;
+        }
+    }
+
+    async createOrUpdateFile(owner, repo, path, message, content, sha, branch) {
+        return this.request('PUT', `/repos/${owner}/${repo}/contents/${path}`, {
+            message,
+            content: Buffer.from(content).toString('base64'),
+            sha,
+            branch
+        });
+    }
+
+    async createPullRequest(owner, repo, title, body, head, base) {
+        return this.request('POST', `/repos/${owner}/${repo}/pulls`, {
+            title,
+            body,
+            head,
+            base
+        });
+    }
+
+    async addLabels(owner, repo, issueNumber, labels) {
+        return this.request('POST', `/repos/${owner}/${repo}/issues/${issueNumber}/labels`, {
+            labels
+        });
+    }
+}
 
 // Response helper for consistent API responses
 class ApiResponse {
@@ -533,118 +608,6 @@ export class TranslationHandler {
         }
     }
 
-    static async createDirectPR(token, repository, title, description, changes, user) {
-        const [owner, repo] = repository.split('/');
-        const octokit = new Octokit({ auth: token });
-
-        // Get default branch
-        const { data: repoData } = await octokit.repos.get({ owner, repo });
-        const baseBranch = repoData.default_branch;
-
-        // Create branch name
-        const timestamp = Date.now();
-        const branch = `translations-${user.name.toLowerCase().replace(/\s+/g, '-')}-${timestamp}`;
-
-        // Get base commit
-        const { data: baseRef } = await octokit.git.getRef({
-            owner,
-            repo,
-            ref: `heads/${baseBranch}`
-        });
-
-        // Create new branch
-        await octokit.git.createRef({
-            owner,
-            repo,
-            ref: `refs/heads/${branch}`,
-            sha: baseRef.object.sha
-        });
-
-        // Group changes by file
-        const fileChanges = new Map();
-        changes.forEach(change => {
-            const filePath = change.filePath || `src/locale/locales/${change.language}/messages.po`;
-            if (!fileChanges.has(filePath)) {
-                fileChanges.set(filePath, []);
-            }
-            fileChanges.get(filePath).push(change);
-        });
-
-        // Update each file
-        for (const [filePath, fileChanges] of fileChanges) {
-            // Get current file content
-            let currentContent = '';
-            let currentSha = null;
-
-            try {
-                const { data: fileData } = await octokit.repos.getContent({
-                    owner,
-                    repo,
-                    path: filePath,
-                    ref: baseBranch
-                });
-                currentContent = Buffer.from(fileData.content, 'base64').toString('utf8');
-                currentSha = fileData.sha;
-            } catch (error) {
-                // File doesn't exist, create new
-                currentContent = this.generateNewPoFile(filePath.split('/').pop().replace('.po', ''));
-            }
-
-            // Apply changes
-            let updatedContent = currentContent;
-            fileChanges.forEach(change => {
-                const escapedMsgid = change.msgid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const escapedTranslation = this.escapePoString(change.new);
-
-                const regex = new RegExp(
-                    `(msgid\\s+"${escapedMsgid}"\\s*\\n(?:#[^\\n]*\\n)*msgstr\\s+")[^"]*("?)`,
-                    'gm'
-                );
-
-                if (regex.test(updatedContent)) {
-                    updatedContent = updatedContent.replace(regex, `$1${escapedTranslation}$2`);
-                } else {
-                    // Add new translation
-                    updatedContent += `\nmsgid "${this.escapePoString(change.msgid)}"\nmsgstr "${escapedTranslation}"\n`;
-                }
-            });
-
-            // Commit changes
-            await octokit.repos.createOrUpdateFileContents({
-                owner,
-                repo,
-                path: filePath,
-                message: `Update ${filePath.split('/').pop()} translations`,
-                content: Buffer.from(updatedContent).toString('base64'),
-                sha: currentSha,
-                branch
-            });
-        }
-
-        // Create pull request
-        const { data: pr } = await octokit.pulls.create({
-            owner,
-            repo,
-            title,
-            body: this.generatePRBody(title, description, changes, user),
-            head: branch,
-            base: baseBranch
-        });
-
-        // Add labels
-        await octokit.issues.addLabels({
-            owner,
-            repo,
-            issue_number: pr.number,
-            labels: ['translations', 'automated']
-        });
-
-        return {
-            prUrl: pr.html_url,
-            prNumber: pr.number
-        };
-    }
-
     static async triggerGitHubAction(env, repository, changes, title, description, translator) {
         const [owner, repo] = repository.split('/');
 
@@ -763,5 +726,106 @@ export class TranslationHandler {
                 "X-Generator: PO Translation Tool\\n"
                 
                 `;
+    }
+
+    static async createDirectPR(token, repository, title, description, changes, user) {
+        const [owner, repo] = repository.split('/');
+        const github = new GitHubAPI(token);
+
+        try {
+            // Get default branch
+            const repoData = await github.getRepo(owner, repo);
+            const baseBranch = repoData.default_branch;
+
+            // Create branch name
+            const timestamp = Date.now();
+            const branch = `translations-${user.name.toLowerCase().replace(/\s+/g, '-')}-${timestamp}`;
+
+            // Get base commit
+            const baseRef = await github.getRef(owner, repo, `heads/${baseBranch}`);
+
+            // Create new branch
+            await github.createRef(owner, repo, branch, baseRef.object.sha);
+
+            // Group changes by file
+            const fileChanges = new Map();
+            changes.forEach(change => {
+                const filePath = change.filePath || `src/locale/locales/${change.language}/messages.po`;
+                if (!fileChanges.has(filePath)) {
+                    fileChanges.set(filePath, []);
+                }
+                fileChanges.get(filePath).push(change);
+            });
+
+            // Update each file
+            for (const [filePath, fileChanges] of fileChanges) {
+                // Get current file content
+                let currentContent = '';
+                let currentSha = null;
+
+                const fileData = await github.getContent(owner, repo, filePath, baseBranch);
+
+                if (fileData) {
+                    currentContent = Buffer.from(fileData.content, 'base64').toString('utf8');
+                    currentSha = fileData.sha;
+                } else {
+                    // File doesn't exist, create new
+                    currentContent = TranslationHandler.generateNewPoFile(
+                        filePath.split('/').pop().replace('.po', '')
+                    );
+                }
+
+                // Apply changes
+                let updatedContent = currentContent;
+                fileChanges.forEach(change => {
+                    const escapedMsgid = change.msgid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const escapedTranslation = TranslationHandler.escapePoString(change.new);
+
+                    const regex = new RegExp(
+                        `(msgid\\s+"${escapedMsgid}"\\s*\\n(?:#[^\\n]*\\n)*msgstr\\s+")[^"]*("?)`,
+                        'gm'
+                    );
+
+                    if (regex.test(updatedContent)) {
+                        updatedContent = updatedContent.replace(regex, `$1${escapedTranslation}$2`);
+                    } else {
+                        // Add new translation
+                        updatedContent += `\nmsgid "${TranslationHandler.escapePoString(change.msgid)}"\nmsgstr "${escapedTranslation}"\n`;
+                    }
+                });
+
+                // Commit changes
+                await github.createOrUpdateFile(
+                    owner,
+                    repo,
+                    filePath,
+                    `Update ${filePath.split('/').pop()} translations`,
+                    updatedContent,
+                    currentSha,
+                    branch
+                );
+            }
+
+            // Create pull request
+            const pr = await github.createPullRequest(
+                owner,
+                repo,
+                title,
+                TranslationHandler.generatePRBody(title, description, changes, user),
+                branch,
+                baseBranch
+            );
+
+            // Add labels
+            await github.addLabels(owner, repo, pr.number, ['translations', 'automated']);
+
+            return {
+                prUrl: pr.html_url,
+                prNumber: pr.number
+            };
+        } catch (error) {
+            console.error('Direct PR creation failed:', error);
+            throw error;
+        }
     }
 }

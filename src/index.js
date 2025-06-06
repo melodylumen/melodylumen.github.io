@@ -12,9 +12,28 @@ export { TranslationRoom };
 const router = Router();
 
 // Helper function to add CORS headers
-function corsResponse(response, env) {
+function corsResponse(response, env, request) {
     const headers = new Headers(response.headers);
-    headers.set('Access-Control-Allow-Origin', env.FRONTEND_URL || '*');
+    
+    // Get origin from request
+    const origin = request.headers.get('Origin');
+    
+    // Allow localhost for development and configured frontend URL for production
+    const allowedOrigins = [
+        'http://localhost:8000',
+        'http://localhost:3000', 
+        'http://127.0.0.1:8000',
+        'http://127.0.0.1:3000',
+        env.FRONTEND_URL
+    ].filter(Boolean);
+    
+    if (origin && allowedOrigins.includes(origin)) {
+        headers.set('Access-Control-Allow-Origin', origin);
+    } else if (!origin || env.ENVIRONMENT === 'development') {
+        // For development or same-origin requests, be more permissive
+        headers.set('Access-Control-Allow-Origin', '*');
+    }
+    
     headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     headers.set('Access-Control-Allow-Credentials', 'true');
@@ -80,7 +99,7 @@ router.get('/api/health', () => new Response('OK', { status: 200 }));
 
 // Handle OPTIONS for CORS preflight
 router.options('*', (request, env) => {
-    return corsResponse(new Response(null, { status: 204 }), env);
+    return corsResponse(new Response(null, { status: 204 }), env, request);
 });
 
 // 404 handler
@@ -97,7 +116,7 @@ export default {
             const response = await router.handle(request, env, ctx);
 
             // Add CORS headers
-            return corsResponse(response, env);
+            return corsResponse(response, env, request);
 
         } catch (error) {
             console.error('Worker error:', error);
@@ -111,7 +130,7 @@ export default {
                 headers: { 'Content-Type': 'application/json' }
             });
 
-            return corsResponse(errorResponse, env);
+            return corsResponse(errorResponse, env, request);
         }
     }
 };

@@ -1,10 +1,14 @@
 // scripts/api-client.js - Updated with dynamic language support
 class APIClient {
     constructor() {
-        // Use environment variable or default to local development
-        this.baseURL = window.WORKER_URL || 'https://gander-social-translation-tool.workers.dev';
+        // Use the configured API base URL
+        this.baseURL = window.CONFIG?.API_BASE_URL || window.WORKER_URL || 'https://gander-social-translation-tool.workers.dev';
         this.sessionToken = localStorage.getItem('po_tool_session');
         this.githubToken = null;
+        
+        if (window.CONFIG?.DEBUG) {
+            console.log('🔗 APIClient initialized with base URL:', this.baseURL);
+        }
     }
 
     // Set auth tokens
@@ -138,12 +142,16 @@ class APIClient {
 
     // Translation operations
     async getTranslations(repo, language) {
-        const result = await this.request(`/translations/${repo}/${language}`);
+        // Properly encode repository path
+        const encodedRepo = encodeURIComponent(repo);
+        const result = await this.request(`/translations/${encodedRepo}/${language}`);
         return result.data || result;
     }
 
     async saveTranslation(repo, language, msgid, translation, metadata = {}) {
-        const result = await this.request(`/translations/${repo}/${language}`, {
+        // Properly encode repository path
+        const encodedRepo = encodeURIComponent(repo);
+        const result = await this.request(`/translations/${encodedRepo}/${language}`, {
             method: 'POST',
             body: JSON.stringify({
                 msgid,

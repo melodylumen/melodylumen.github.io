@@ -2,7 +2,14 @@
 
 A web-based tool for editing `.po` translation files with real-time collaboration, progress tracking, and automated pull request creation. Designed specifically to support Indigenous language preservation through technology.
 
-## Features
+## ⚡ Quick Start
+
+1. **Setup**: Follow the detailed [SETUP.md](./SETUP.md) guide
+2. **Run**: `./start-dev.sh` or `npm run start-dev`
+3. **Access**: Open http://localhost:8000
+4. **Login**: Use token `DEV-TOKEN-123` or your GitHub Personal Access Token
+
+## 🌟 Features
 
 ### Core Features
 - 📝 **Web-based PO file editing** - Edit translations directly in your browser
@@ -17,98 +24,13 @@ A web-based tool for editing `.po` translation files with real-time collaboratio
 - **GitHub OAuth** - Full features including language creation and direct PR submission
 - **Invite Tokens** - For non-GitHub users with limited features
 
-## Quick Start
-
-### For Translators
-
-1. **Access the tool**: Navigate to the hosted URL (e.g., `https://your-org.github.io/po-translation-tool`)
-
-2. **Login**:
-    - **GitHub users**: Use your Personal Access Token with `repo` scope
-    - **Other users**: Use the invite token provided by your organization
-
-3. **Select repository and language**:
-    - Choose the repository you want to translate
-    - Select an existing language or create a new one (GitHub auth required)
-
-4. **Translate**:
-    - Edit translations in the web interface
-    - Changes are auto-saved locally
-    - See real-time indicators when others are editing
-
-5. **Submit changes**:
-    - Review your changes
-    - Submit as a pull request
-    - Changes are grouped by language and date
-
-### Creating a New Language (GitHub Auth Required)
-
-1. After selecting a repository, click **"+ Create New Language"**
-2. Enter:
-    - **Language code**: Standard ISO code (e.g., 'fr', 'es', 'cree')
-    - **Language name**: Full name of the language
-    - **Source language**: Usually 'en' to copy all message IDs
-3. Click "Create Language"
-4. The new language directory and PO file will be created automatically
-
-## Installation & Setup
-
-### Prerequisites
-- Node.js 18+
-- Cloudflare account (for Workers)
-- GitHub repository with appropriate permissions
-
-### 1. Clone and Install
-
-```bash
-git clone https://github.com/gander-foundation/po-translation-tool.git
-cd po-translation-tool
-npm install
-```
-
-### 2. Configure Cloudflare Worker
-
-Update `wrangler.toml`:
-```toml
-name = "your-translation-tool"
-[vars]
-FRONTEND_URL = "https://your-org.github.io"
-JWT_SECRET = "your-secret-key" # Change in production!
-```
-
-### 3. Initialize Database
-
-```bash
-# Create D1 database
-wrangler d1 create po-translation-db
-
-# Apply schema
-wrangler d1 execute po-translation-db --file=./schema.sql --local
-
-# Deploy to Cloudflare
-wrangler deploy
-```
-
-### 4. Configure GitHub Actions
-
-Add to your translation repository:
-1. Copy `.github/workflows/process-translations.yml`
-2. Copy `.github/scripts/process-translations.js`
-3. Add secrets:
-    - `GITHUB_TOKEN` (automatic)
-    - `CLOUDFLARE_API_TOKEN` (optional)
-
-### 5. Deploy Frontend
-
-The frontend automatically deploys via GitHub Actions when you push to main.
-
-## Architecture
+## 🚀 Architecture
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │                 │     │                 │     │                 │
-│  GitHub Pages   │────▶│ Cloudflare      │────▶│    GitHub       │
-│  (Frontend)     │     │ Workers (API)   │     │  Repository     │
+│  Frontend       │────▶│ Cloudflare      │────▶│    GitHub       │
+│  (Static HTML)  │     │ Workers (API)   │     │  Repository     │
 │                 │     │                 │     │                 │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
                                │
@@ -119,134 +41,141 @@ The frontend automatically deploys via GitHub Actions when you push to main.
                         └─────────────────┘
 ```
 
-## Configuration
+## 📋 Setup
+
+### Prerequisites
+- Node.js 18+
+- Python 3 (for serving frontend)
+- Cloudflare account (free tier works)
+
+### Quick Setup Commands
+
+```bash
+# 1. Install dependencies
+npm install
+npm install -g wrangler
+
+# 2. Check your setup
+npm run setup-check
+
+# 3. Follow the detailed setup guide
+# See SETUP.md for complete instructions
+
+# 4. Start development
+npm run start-dev
+```
+
+### For Local Development with Remote Worker
+
+If you already have a deployed worker and just want to run the frontend locally:
+
+1. Create `config.local.js`:
+```javascript
+window.WORKER_URL = 'https://your-worker-url.workers.dev';
+```
+
+2. Start the frontend:
+```bash
+python3 -m http.server 8000
+```
+
+3. Open http://localhost:8000
+
+## 🔧 Configuration
 
 ### Repository Configuration
 
-Create or update `config/repositories.json`:
-```json
-{
-  "repositories": [
-    {
-      "owner": "your-org",
-      "name": "your-app",
-      "description": "Your application",
-      "translationPath": "src/locale/locales",
-      "requiresAuth": true
-    }
-  ]
-}
-```
+The tool automatically detects languages from your repository structure. To add custom repositories, update the worker's configuration or use the admin interface.
 
 ### Supported Languages
 
-Languages are now dynamically detected from the repository structure. To add language name mappings, update `scripts/config.js`:
+Languages are dynamically detected from repository structure. The tool has built-in support for:
 
-```javascript
-LANGUAGE_NAMES: {
-    cr: 'Cree (ᓀᐦᐃᔭᐍᐏᐣ)',
-    iu: 'Inuktitut (ᐃᓄᒃᑎᑐᑦ)',
-    // Add more as needed
-}
+**Indigenous Languages:**
+- Cree (ᓀᐦᐃᔭᐍᐏᐣ) - `cr`
+- Inuktitut (ᐃᓄᒃᑎᑐᑦ) - `iu`
+- Ojibwe (ᐊᓂᔑᓈᐯᒧᐎᓐ) - `oj`
+- Mi'kmaq - `miq`
+- Innu-aimun - `innu`
+
+**Common Languages:**
+- English, French, Spanish, German, and 30+ others
+
+## 🛠️ Development
+
+### Project Structure
+```
+po-translation-tool/
+├── index.html              # Frontend application
+├── config.local.js         # Local development config
+├── scripts/                # Frontend JavaScript
+│   ├── app.js             # Main application
+│   ├── api-client.js      # API communication
+│   └── config.js          # Configuration
+├── src/                    # Cloudflare Worker backend
+│   ├── index.js           # Main worker
+│   ├── auth-handler.js    # Authentication
+│   └── translation-handler.js # Translation logic
+├── wrangler.toml.template  # Configuration template
+└── SETUP.md               # Detailed setup guide
 ```
 
-## Branch Management
+### Available Scripts
+- `npm run dev` - Start worker locally
+- `npm run start-dev` - Start both frontend and worker
+- `npm run setup-check` - Verify your setup
+- `npm run test` - Run tests
+- `npm run deploy` - Deploy to production
 
-The tool automatically manages branches to prevent conflicts:
+## 🌍 For Translators
 
-- Branch naming: `language-update-{language-code}-{yyyy-mm-dd}`
-- All changes for a language on a given day go to the same branch
-- Existing branches are reused
-- PRs are updated instead of creating duplicates
+1. **Access the tool**: Navigate to the hosted URL
+2. **Login**: Use invite token or GitHub Personal Access Token
+3. **Select repository and language**: Choose what you want to translate
+4. **Translate**: Edit translations in the web interface
+5. **Submit**: Review changes and create a pull request
 
-## API Endpoints
+### Creating New Languages (GitHub auth required)
 
-### Authentication
-- `POST /api/auth/github` - Authenticate with GitHub
-- `POST /api/auth/token` - Authenticate with invite token
-- `GET /api/auth/validate` - Validate session
+1. Click **"+ Create New Language"** after selecting a repository
+2. Enter language code (e.g., 'fr', 'cree', 'iu')
+3. Enter language name (e.g., 'French', 'Cree')
+4. Choose source language to copy from (usually English)
 
-### Repositories & Languages
-- `GET /api/repositories` - List available repositories
-- `GET /api/repositories/:owner/:repo/languages` - Get languages (dynamic)
-- `POST /api/languages` - Create new language (GitHub auth required)
+## 📚 Documentation
 
-### Translations
-- `GET /api/translations/:repo/:language` - Get translations
-- `POST /api/translations/:repo/:language` - Save translation
-- `GET /api/translations/changes` - Get pending changes
-- `POST /api/translations/submit-pr` - Submit pull request
+- [SETUP.md](./SETUP.md) - Complete setup guide
+- [API Documentation](./docs/) - API endpoints and usage
+- [GitHub Actions Guide](./docs/github-action-pr.md) - Automated PR processing
 
-## Security
-
-### Authentication Levels
-1. **GitHub Users**: Full access including language creation
-2. **Token Users**: Translation editing only
-
-### Best Practices
-- Use environment variables for sensitive data
-- Implement rate limiting
-- Regular security audits
-- Monitor PR submissions
-
-## Development
-
-### Local Development
-
-```bash
-# Start the worker locally
-wrangler dev
-
-# In another terminal, start the frontend
-python3 -m http.server 8000
-
-# Access at http://localhost:8000
-```
-
-### Testing
-
-```bash
-# Run tests
-npm test
-
-# Test GitHub Actions locally
-act -j process-translation
-```
-
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
+2. Follow the setup guide
 3. Make your changes
 4. Submit a pull request
 
-### Code Style
-- Use ES6+ features
-- Follow existing patterns
-- Add comments for complex logic
-- Update documentation
-
-## Troubleshooting
+## 🐛 Troubleshooting
 
 ### Common Issues
 
-1. **"Cannot create language"**
-    - Ensure you're using GitHub authentication
-    - Check repository write permissions
+1. **CORS errors**: Check worker URL in `config.local.js`
+2. **Database errors**: Ensure schema is applied with `npm run db:init`
+3. **Authentication issues**: Verify GitHub token has `repo` scope
+4. **Worker not starting**: Check `wrangler dev` output for errors
 
-2. **"Branch already exists"**
-    - This is normal - the tool reuses existing branches
-    - Check for open PRs that need review
+### Getting Help
 
-3. **WebSocket connection fails**
-    - Check that Durable Objects are configured
-    - Verify CORS settings
+- Check browser console for frontend errors
+- Check worker logs: `wrangler tail`
+- Verify setup: `npm run setup-check`
+- Review [SETUP.md](./SETUP.md) for detailed instructions
 
-## License
+## 📄 License
 
 MIT License - See LICENSE file for details
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
 This tool was created to support Indigenous language preservation efforts, with special focus on:
 - Cree (ᓀᐦᐃᔭᐍᐏᐣ)

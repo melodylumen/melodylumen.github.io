@@ -123,6 +123,13 @@
 </div>
 
 <!-- Scripts -->
+<!-- Load local config first if it exists (for development) -->
+<script>
+// Try to load local config for development
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    document.write('<script src="config.local.js"><\/script>');
+}
+</script>
 <script src="scripts/config.js"></script>
 <script src="scripts/api-client.js"></script>
 <script src="scripts/translation-manager.js"></script>

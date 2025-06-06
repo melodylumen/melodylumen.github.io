@@ -1,0 +1,41 @@
+name = "po-translation-tool"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Environment variables
+[vars]
+FRONTEND_URL = "http://localhost:8000"  # Update for production
+JWT_SECRET = "development-secret-change-in-production"
+ENVIRONMENT = "development"
+
+# KV namespace for session storage
+# Run: wrangler kv:namespace create "po_translations"
+# Run: wrangler kv:namespace create "po_translations" --preview
+[[kv_namespaces]]
+binding = "gander_social_translations"
+id = ""  # Replace with your KV namespace ID from wrangler kv:namespace create
+preview_id = ""  # Replace with your preview KV namespace ID
+
+# D1 Database
+# Run: wrangler d1 create po-translation-db
+[[d1_databases]]
+binding = "DB"
+database_name = "po-translation-db"
+database_id = ""  # Replace with your D1 database ID from wrangler d1 create
+
+# Durable Objects for WebSocket handling
+[durable_objects]
+bindings = [
+    { name = "TRANSLATION_ROOMS", class_name = "TranslationRoom" }
+]
+
+# Development settings
+[dev]
+port = 8787
+local_protocol = "http"
+
+# Migrations for Durable Objects
+[[migrations]]
+tag = "v1"
+new_classes = ["TranslationRoom"]

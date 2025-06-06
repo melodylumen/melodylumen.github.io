@@ -693,7 +693,9 @@ msgstr ""
                 return ApiResponse.error('Invalid translation path', 400, 'INVALID_PATH');
             }
 
-            const [, repo, language] = match;
+            const [, encodedRepo, language] = match;
+            // Decode the repository parameter
+            const repo = decodeURIComponent(encodedRepo);
 
             // Get or create session
             const session = await request.db.getActiveSession(
@@ -759,7 +761,9 @@ msgstr ""
                 return ApiResponse.error('Invalid translation path', 400, 'INVALID_PATH');
             }
 
-            const [, repo, language] = match;
+            const [, encodedRepo, language] = match;
+            // Decode the repository parameter
+            const repo = decodeURIComponent(encodedRepo);
 
             const data = await request.json();
             const { msgid, translation, originalText, previousTranslation, filePath } = data;

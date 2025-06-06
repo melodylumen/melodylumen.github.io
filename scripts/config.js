@@ -19,14 +19,14 @@ window.CONFIG = {
     MAX_TRANSLATIONS_PER_PAGE: 50,
     SEARCH_DEBOUNCE: 300,
 
-    // Feature flags
-    FEATURES: {
+    // Feature flags - can be overridden by local config
+    FEATURES: Object.assign({
         REAL_TIME_COLLABORATION: true,
         AUTO_SAVE: true,
         PROGRESS_TRACKING: true,
         OFFLINE_MODE: false, // Not yet implemented
         LANGUAGE_CREATION: true // New feature flag
-    },
+    }, window.LOCAL_CONFIG?.features || {}),
 
     // Known language names (will be supplemented by dynamic data)
     LANGUAGE_NAMES: {
@@ -73,3 +73,12 @@ window.CONFIG = {
         'uk': 'Ukrainian'
     }
 };
+
+// Apply local config overrides if available
+if (window.LOCAL_CONFIG) {
+    console.log('📝 Applying local configuration overrides');
+    if (window.LOCAL_CONFIG.debug) {
+        window.CONFIG.DEBUG = true;
+        console.log('🐛 Debug mode enabled');
+    }
+}

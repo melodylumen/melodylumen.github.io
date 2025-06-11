@@ -5,19 +5,19 @@ compatibility_flags = ["nodejs_compat"]
 
 # Environment variables
 [vars]
-FRONTEND_URL = "https://your-org.github.io"
-JWT_SECRET = "your-secret-key-here" # Change this in production!
+FRONTEND_URL = "https://melodylumen.github.io"
+JWT_SECRET = "${JWT_SECRET}"
 
 # KV namespace for session storage
 [[kv_namespaces]]
-binding = "gander_social_translations"
+binding = "gander-social-translations"
 id = "077b9a43f68c49a986cecae95ebf5f41"
 preview_id = "077b9a43f68c49a986cecae95ebf5f41" # Use same ID for local dev
 
 # D1 Database
 [[d1_databases]]
-binding = "DB"
-database_name = "gander-social-translation-db"
+binding = "gander_social_translation_tool"
+database_name = "gander_social_translation_tool"
 database_id = "65d4272a-e117-4737-a94b-b7d92f1e96a2"
 
 # Durable Objects for WebSocket handling

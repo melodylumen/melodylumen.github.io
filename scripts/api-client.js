@@ -2,7 +2,7 @@
 class APIClient {
     constructor() {
         // Use the configured API base URL
-        this.baseURL = window.CONFIG?.API_BASE_URL || window.WORKER_URL || 'https://gander-social-translation-tool.workers.dev';
+        this.baseURL = window.CONFIG?.API_BASE_URL || window.WORKER_URL || 'https://gander-social-translation-tool.melody-rae-lumen.workers.dev';
         this.sessionToken = localStorage.getItem('po_tool_session');
         this.githubToken = null;
         

@@ -56,7 +56,7 @@ cp wrangler.toml.template wrangler.toml
 Edit `wrangler.toml` and replace the empty `id` fields with the IDs from step 4:
 ```toml
 [[kv_namespaces]]
-binding = "gander_social_translations"
+binding = "gander-social-translations"
 id = "your-kv-namespace-id-here"
 preview_id = "your-preview-kv-namespace-id-here"
 

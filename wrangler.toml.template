@@ -13,7 +13,7 @@ ENVIRONMENT = "development"
 # Run: wrangler kv:namespace create "po_translations"
 # Run: wrangler kv:namespace create "po_translations" --preview
 [[kv_namespaces]]
-binding = "gander_social_translations"
+binding = "gander-social-translations"
 id = ""  # Replace with your KV namespace ID from wrangler kv:namespace create
 preview_id = ""  # Replace with your preview KV namespace ID
 

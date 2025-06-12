@@ -6,10 +6,6 @@
       "name": "gander-social-translation-db",
       "local": true
     },
-    "kv": {
-      "namespace": "gander_social_translations",
-      "preview": true
-    },
     "features": {
       "realTimeCollaboration": true,
       "languageCreation": true,
@@ -23,42 +19,22 @@
       "testTokens": ["DEV-TOKEN-123", "DEV-TOKEN-456"]
     }
   },
-
-  "staging": {
-    "workerUrl": "https://po-tool-staging.workers.dev",
-    "frontendUrl": "https://staging.gander-foundation.github.io",
-    "database": {
-      "name": "gander-social-translation-db-staging",
-      "local": false
-    },
-    "kv": {
-      "namespace": "gander_social_translations_staging",
-      "preview": false
-    },
-    "features": {
-      "realTimeCollaboration": true,
-      "languageCreation": true,
-      "autoSave": true,
-      "progressTracking": true,
-      "debugMode": true
-    },
-    "auth": {
-      "sessionTimeout": 86400,
-      "testTokens": ["STAGING-TOKEN-001", "STAGING-TOKEN-002"]
-    }
-  },
-
+  "kv_namespaces": [{
+    "binding": "KV_BINDING",
+    "id": "077b9a43f68c49a986cecae95ebf5f41"
+  }],
   "production": {
-    "workerUrl": "https://gander-social-translation-tool.workers.dev",
-    "frontendUrl": "https://gander-foundation.github.io/po-translation-tool",
+    "workerUrl": "https://gander-social-translation-tool.melody-rae-lumen.workers.dev",
+    "frontendUrl": "https://melodylumen.github.io/",
     "database": {
       "name": "gander-social-translation-db",
       "local": false
     },
-    "kv": {
-      "namespace": "gander_social_translations",
-      "preview": false
-    },
+    "d1_databases": [{
+      "binding": "DB",
+      "database_name": "gander_social_translation_tool",
+      "database_id": "65d4272a-e117-4737-a94b-b7d92f1e96a2"
+    }],
     "features": {
       "realTimeCollaboration": true,
       "languageCreation": true,
@@ -87,6 +63,7 @@
       },
       "cors": {
         "allowedOrigins": [
+          "https://melodylumen.github.io",
           "https://gander-foundation.github.io",
           "https://gander.social"
         ]

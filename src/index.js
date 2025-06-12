@@ -97,6 +97,15 @@ router.get('/api/ws', async (request, env) => {
 // Health check
 router.get('/api/health', () => new Response('OK', { status: 200 }));
 
+// Durable Object test route to ensure namespace and migration are created
+router.get('/do-test', async (request, env) => {
+    const id = env.TRANSLATION_ROOMS.idFromName('test');
+    const stub = env.TRANSLATION_ROOMS.get(id);
+    // Call a dummy fetch to trigger the Durable Object and SQLite storage
+    const response = await stub.fetch('https://dummy/');
+    return new Response('Durable Object called: ' + response.status);
+});
+
 // Handle OPTIONS for CORS preflight
 router.options('*', (request, env) => {
     return corsResponse(new Response(null, { status: 204 }), env, request);

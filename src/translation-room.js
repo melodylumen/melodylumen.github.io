@@ -1,9 +1,14 @@
-export class TranslationRoom {
-    constructor(state, env) {
-        this.state = state;
+import { DurableObject } from "cloudflare:workers";
+
+export class TranslationRoom extends DurableObject {
+    constructor(ctx, env) {
+        super(ctx, env);
+        this.ctx = ctx;
         this.env = env;
         this.sessions = new Map(); // connectionId -> session info
         this.activeEditors = new Map(); // msgid -> Set of user IDs
+        // Ensure SQLite storage is initialized (dummy query)
+        this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS _init_check (id INTEGER PRIMARY KEY)");
     }
 
     async fetch(request) {

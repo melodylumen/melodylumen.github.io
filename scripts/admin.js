@@ -1,6 +1,6 @@
 // scripts/admin.js - Admin management utilities
 
-const WORKER_URL = process.env.WORKER_URL || 'https://gander-social-translation-tool.workers.dev';
+const WORKER_URL = process.env.WORKER_URL || 'https://gander-social-translation-tool.melody-rae-lumen.workers.dev';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 
 class AdminClient {

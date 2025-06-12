@@ -53,7 +53,7 @@ export class AuthHandler {
             const sessionToken = await AuthHandler.generateSessionToken(user.id, 'github', request.env);
 
             // Store session in KV with 24 hour expiration
-            await request.env.gander_social_translations.put(
+            await request.env.KV_BINDING.put(
                 `session:${sessionToken}`,
                 JSON.stringify({
                     userId: user.id,
@@ -105,7 +105,7 @@ export class AuthHandler {
             }
 
             // Get valid tokens from KV
-            let validTokens = await request.env.gander_social_translations.get('valid_tokens', 'json');
+            let validTokens = await request.env.KV_BINDING.get('valid_tokens', 'json');
 
             // Default tokens for development
             if (!validTokens) {
@@ -137,7 +137,7 @@ export class AuthHandler {
             const sessionToken = await AuthHandler.generateSessionToken(user.id, 'token', request.env);
 
             // Store session in KV
-            await request.env.gander_social_translations.put(
+            await request.env.KV_BINDING.put(
                 `session:${sessionToken}`,
                 JSON.stringify({
                     userId: user.id,
@@ -200,7 +200,7 @@ export class AuthHandler {
             const payload = jwt.decode(sessionToken);
 
             // Get session from KV
-            const session = await request.env.gander_social_translations.get(
+            const session = await request.env.KV_BINDING.get(
                 `session:${sessionToken}`,
                 'json'
             );
@@ -214,7 +214,7 @@ export class AuthHandler {
 
             // Check expiration
             if (new Date(session.expiresAt) < new Date()) {
-                await request.env.gander_social_translations.delete(`session:${sessionToken}`);
+                await request.env.KV_BINDING.delete(`session:${sessionToken}`);
                 return new Response(JSON.stringify({ error: 'Session expired' }), {
                     status: 401,
                     headers: { 'Content-Type': 'application/json' }
@@ -266,7 +266,7 @@ export class AuthHandler {
             throw new Error('Invalid token');
         }
 
-        const session = await request.env.gander_social_translations.get(
+        const session = await request.env.KV_BINDING.get(
             `session:${sessionToken}`,
             'json'
         );

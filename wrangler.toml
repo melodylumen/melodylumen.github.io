@@ -23,7 +23,7 @@ database_id = "65d4272a-e117-4737-a94b-b7d92f1e96a2"
 # Durable Objects for WebSocket handling
 [durable_objects]
 bindings = [
-    { name = "TRANSLATION_ROOMS", class_name = "TranslationRoom", script_name = "gander-social-translation-tool" }
+    { name = "TRANSLATION_ROOMS", class_name = "TranslationRoom" }
 ]
 
 # Development settings
@@ -37,5 +37,5 @@ command = "npm install"
 
 # Migrations for Durable Objects
 [[migrations]]
-tag = "v2"
+tag = "v3"
 new_sqlite_classes = ["TranslationRoom"]

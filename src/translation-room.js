@@ -1,5 +1,8 @@
-export class TranslationRoom {
+import { DurableObject } from "cloudflare:workers";
+
+export class TranslationRoom extends DurableObject {
     constructor(state, env) {
+        super(state, env);
         this.state = state;
         this.env = env;
         this.sessions = new Map(); // connectionId -> session info

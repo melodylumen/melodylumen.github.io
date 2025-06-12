@@ -26,10 +26,6 @@ bindings = [
     { name = "TRANSLATION_ROOMS", class_name = "TranslationRoom", script_name = "gander-social-translation-tool" }
 ]
 
-# Routes
-[[routes]]
-pattern = "gander-social-translation-tool.melody-rae-lumen.workers.dev/*"
-
 # Development settings
 [dev]
 port = 8787

@@ -10,13 +10,13 @@ JWT_SECRET = "${JWT_SECRET}"
 
 # KV namespace for session storage
 [[kv_namespaces]]
-binding = "gander-social-translations"
+binding = "KV_BINDING"
 id = "077b9a43f68c49a986cecae95ebf5f41"
 preview_id = "077b9a43f68c49a986cecae95ebf5f41" # Use same ID for local dev
 
 # D1 Database
 [[d1_databases]]
-binding = "gander_social_translation_tool"
+binding = "DB"
 database_name = "gander_social_translation_tool"
 database_id = "65d4272a-e117-4737-a94b-b7d92f1e96a2"
 

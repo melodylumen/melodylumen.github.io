@@ -10,7 +10,7 @@ JWT_SECRET = "your-secret-key-here" # Change this in production!
 
 # KV namespace for session storage
 [[kv_namespaces]]
-binding = "gander_social_translations"
+binding = "gander-social-translations"
 id = "077b9a43f68c49a986cecae95ebf5f41"
 preview_id = "077b9a43f68c49a986cecae95ebf5f41" # Use same ID for local dev
 

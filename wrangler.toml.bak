@@ -28,7 +28,7 @@ bindings = [
 
 # Routes
 [[routes]]
-pattern = "gander-social-translation-tool.workers.dev/*"
+pattern = "gander-social-translation-tool.melody-rae-lumen.workers.dev/*"
 zone_name = "workers.dev"
 
 # Development settings

@@ -28,8 +28,12 @@ bindings = [
 
 # Routes
 [[routes]]
-pattern = "gander-social-translation-tool.workers.dev/*"
-zone_name = "workers.dev"
+pattern = "gander-social-translation-tool.melody-rae-lumen.workers.dev/*"
+script = "gander-social-translation-tool"
+
+[[routes]]
+pattern = "gander-social-translation-tool.melody-rae-lumen.workers.dev/proxy/*"
+script = "proxy"
 
 # Development settings
 [dev]

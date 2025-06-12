@@ -1,7 +1,7 @@
 // scripts/config.js - Updated to support dynamic languages
 window.CONFIG = {
     // API endpoint - can be overridden by environment
-    API_BASE_URL: window.WORKER_URL || 'https://gander-social-translation-tool.workers.dev',
+    API_BASE_URL: window.WORKER_URL || 'https://gander-social-translation-tool.melody-rae-lumen.workers.dev',
 
     // GitHub API configuration
     GITHUB_API_BASE: 'https://api.github.com',

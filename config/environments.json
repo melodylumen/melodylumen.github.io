@@ -24,7 +24,7 @@
     "id": "077b9a43f68c49a986cecae95ebf5f41"
   }],
   "production": {
-    "workerUrl": "https://gander-social-translation-tool.workers.dev",
+    "workerUrl": "https://gander-social-translation-tool.melody-rae-lumen.workers.dev",
     "frontendUrl": "https://melodylumen.github.io/",
     "database": {
       "name": "gander-social-translation-db",

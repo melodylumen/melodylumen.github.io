@@ -96,6 +96,26 @@ router.get('/api/ws', async (request, env) => {
 // Health check
 router.get('/api/health', () => new Response('OK', { status: 200 }));
 
+// Debug endpoint for KV storage (remove in production)
+router.get('/api/debug/kv/:key', async (request, env) => {
+    try {
+        const key = request.params.key;
+        const value = await env.KV_BINDING.get(key, 'json');
+        return new Response(JSON.stringify({
+            key,
+            value,
+            exists: value !== null
+        }, null, 2), {
+            headers: { 'Content-Type': 'application/json' }
+        });
+    } catch (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
+});
+
 // Durable Object test route to ensure namespace and migration are created
 router.get('/do-test', async (request, env) => {
     const id = env.TRANSLATION_ROOMS.idFromName('test');

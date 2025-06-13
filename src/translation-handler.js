@@ -122,7 +122,7 @@ export class TranslationHandler {
             if (!repositories || !repositories.data || repositories.expires < Date.now()) {
                 const defaultRepositories = [
                     {
-                        owner: 'gander-foundation',
+                        owner: 'melodylumen',
                         name: 'social-app',
                         description: 'Gander Social Application - Indigenous Language Support',
                         translationPath: 'src/locale/locales',
@@ -185,7 +185,7 @@ export class TranslationHandler {
 
             if (!repoConfig) {
                 // If repository not found in config, but it's one of our expected repos, create a default config
-                if ((owner === 'gander-foundation' || owner === 'gander-social') && repo === 'social-app') {
+                if (owner === 'melodylumen' && repo === 'social-app') {
                     const defaultConfig = {
                         owner: owner, // Use the owner from the request
                         name: 'social-app',
@@ -282,7 +282,7 @@ export class TranslationHandler {
             // If still no languages, use defaults based on repository
             if (languages.length === 0) {
                 console.log('Using default languages');
-                if (owner === 'gander-foundation' || owner === 'gander-social') {
+                if (owner === 'melodylumen') {
                     // Default Indigenous languages for Gander Social
                     languages = ['cr', 'iu', 'oj', 'miq', 'innu', 'fr'];
                 } else {
@@ -740,7 +740,7 @@ export class TranslationHandler {
         });
 
         body += `---\n`;
-        body += `_This PR was created by the [PO Translation Tool](https://github.com/gander-foundation/po-translation-tool)_\n`;
+        body += `_This PR was created by the [PO Translation Tool](https://github.com/melodylumen/po-translation-tool)_\n`;
         body += `_Supporting Indigenous language preservation through technology 🪶_`;
 
         return body;

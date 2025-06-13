@@ -1,7 +1,7 @@
 {
   "repositories": [
     {
-      "owner": "your-org",
+      "owner": "melodylumen",
       "name": "social-app",
       "description": "Gander Social Application",
       "translationPath": "src/locale/locales",
@@ -9,7 +9,7 @@
       "requiresAuth": true
     },
     {
-      "owner": "your-org",
+      "owner": "melodylumen",
       "name": "other-app",
       "description": "Another application with translations",
       "translationPath": "locales",

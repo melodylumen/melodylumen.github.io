@@ -42,10 +42,14 @@ vars = { FRONTEND_URL = "https://melodylumen.github.io", ENVIRONMENT = "producti
 [build]
 command = "npm install"
 
-# Durable Objects migrations
-[[migrations]]
-tag = "v5"
-new_sqlite_classes = ["TranslationRoom"]
+# REMOVED MIGRATION - TranslationRoom already exists in production
+# If you need to make changes to the Durable Object, use a new migration tag
+# Example for future updates:
+# [[migrations]]
+# tag = "v6"
+# renamed_classes = [
+#   { from = "OldClassName", to = "NewClassName" }
+# ]
 
 # Enable observability
 [observability]

@@ -12,46 +12,94 @@ export class TranslationRoom extends DurableObject {
     }
 
     async fetch(request) {
-        if (request.headers.get("Upgrade") !== "websocket") {
-            return new Response("Expected WebSocket", { status: 400 });
+        try {
+            if (request.headers.get("Upgrade") !== "websocket") {
+                return new Response("Expected WebSocket", { status: 400 });
+            }
+
+            const url = new URL(request.url);
+            const repo = url.searchParams.get('repo');
+            const language = url.searchParams.get('language');
+            const sessionId = url.searchParams.get('sessionId');
+            
+            // Get session data passed from the main worker
+            let sessionData;
+            try {
+                sessionData = JSON.parse(url.searchParams.get('sessionData') || '{}');
+            } catch (error) {
+                console.error('Invalid session data:', error);
+                return new Response("Invalid session data", { status: 400 });
+            }
+
+            if (!repo || !language || !sessionId || !sessionData.userId) {
+                return new Response("Missing required parameters", { status: 400 });
+            }
+
+            const pair = new WebSocketPair();
+            const [client, server] = Object.values(pair);
+
+            await this.handleSession(server, {
+                repo,
+                language,
+                sessionId,
+                userId: sessionData.userId,
+                authMethod: sessionData.authMethod || 'unknown'
+            });
+
+            return new Response(null, {
+                status: 101,
+                webSocket: client,
+            });
+        } catch (error) {
+            console.error('TranslationRoom fetch error:', error);
+            return new Response("WebSocket setup failed", { status: 500 });
         }
-
-        const pair = new WebSocketPair();
-        const [client, server] = Object.values(pair);
-
-        await this.handleSession(server, request);
-
-        return new Response(null, {
-            status: 101,
-            webSocket: client,
-        });
     }
 
-    async handleSession(webSocket, request) {
-        webSocket.accept();
+    async handleSession(webSocket, sessionInfo) {
+        try {
+            webSocket.accept();
 
-        const url = new URL(request.url);
-        const sessionId = url.searchParams.get('sessionId');
-        const userId = url.searchParams.get('userId');
-        const userName = url.searchParams.get('userName');
+            const connectionId = crypto.randomUUID();
 
-        const connectionId = crypto.randomUUID();
+            this.sessions.set(connectionId, {
+                webSocket,
+                sessionId: sessionInfo.sessionId,
+                userId: sessionInfo.userId,
+                userName: `User_${sessionInfo.userId.slice(-6)}`, // Generate a readable name
+                repo: sessionInfo.repo,
+                language: sessionInfo.language,
+                connectedAt: Date.now()
+            });
 
-        this.sessions.set(connectionId, {
-            webSocket,
-            sessionId,
-            userId,
-            userName,
-            connectedAt: Date.now()
-        });
+            console.log(`WebSocket connected: ${connectionId} for ${sessionInfo.userId}`);
 
-        webSocket.addEventListener('message', async (msg) => {
-            await this.handleMessage(connectionId, msg.data);
-        });
+            webSocket.addEventListener('message', async (msg) => {
+                await this.handleMessage(connectionId, msg.data);
+            });
 
-        webSocket.addEventListener('close', () => {
-            this.handleClose(connectionId);
-        });
+            webSocket.addEventListener('close', () => {
+                this.handleClose(connectionId);
+            });
+
+            webSocket.addEventListener('error', (error) => {
+                console.error('WebSocket error for connection:', connectionId, error);
+                this.handleClose(connectionId);
+            });
+
+            // Send welcome message
+            webSocket.send(JSON.stringify({
+                type: 'connected',
+                connectionId,
+                message: 'Connected to translation room'
+            }));
+
+        } catch (error) {
+            console.error('WebSocket session handling error:', error);
+            if (webSocket.readyState === WebSocket.CONNECTING || webSocket.readyState === WebSocket.OPEN) {
+                webSocket.close(1011, 'Server error');
+            }
+        }
     }
 
     async handleMessage(connectionId, message) {
@@ -71,9 +119,19 @@ export class TranslationRoom extends DurableObject {
                 case 'translationUpdate':
                     await this.broadcastTranslationUpdate(session, data);
                     break;
+                case 'ping':
+                    // Respond to heartbeat
+                    session.webSocket.send(JSON.stringify({ type: 'pong' }));
+                    break;
+                default:
+                    console.log('Unknown message type:', data.type);
             }
         } catch (error) {
             console.error('Message handling error:', error);
+            session.webSocket.send(JSON.stringify({
+                type: 'error',
+                message: 'Invalid message format'
+            }));
         }
     }
 
@@ -116,9 +174,11 @@ export class TranslationRoom extends DurableObject {
         for (const [connectionId, session] of this.sessions) {
             if (session.userId !== excludeUserId) {
                 try {
-                    session.webSocket.send(payload);
+                    if (session.webSocket.readyState === WebSocket.OPEN) {
+                        session.webSocket.send(payload);
+                    }
                 } catch (error) {
-                    // Connection might be closed
+                    console.error('Broadcast error, removing connection:', connectionId, error);
                     this.sessions.delete(connectionId);
                 }
             }
@@ -128,6 +188,8 @@ export class TranslationRoom extends DurableObject {
     handleClose(connectionId) {
         const session = this.sessions.get(connectionId);
         if (!session) return;
+
+        console.log(`WebSocket disconnected: ${connectionId}`);
 
         // Clean up any active edits
         for (const [msgid, editors] of this.activeEditors) {

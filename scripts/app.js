@@ -294,7 +294,7 @@ class TranslationApp {
         try {
             this.showLoading('Loading translations...');
 
-            // Connect WebSocket for real-time collaboration
+            // Try to connect WebSocket for real-time collaboration (optional)
             this.connectWebSocket();
 
             // Load translations
@@ -394,22 +394,30 @@ class TranslationApp {
     async onTranslationFocus(msgid) {
         // Notify others that we're editing this translation
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({
-                type: 'startEdit',
-                msgid,
-                user: this.currentUser.name
-            }));
+            try {
+                this.ws.send(JSON.stringify({
+                    type: 'startEdit',
+                    msgid,
+                    user: this.currentUser?.name || 'Anonymous'
+                }));
+            } catch (error) {
+                console.warn('Failed to send WebSocket message:', error);
+            }
         }
     }
 
     async onTranslationBlur(msgid) {
         // Notify others that we've stopped editing
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({
-                type: 'endEdit',
-                msgid,
-                user: this.currentUser.name
-            }));
+            try {
+                this.ws.send(JSON.stringify({
+                    type: 'endEdit',
+                    msgid,
+                    user: this.currentUser?.name || 'Anonymous'
+                }));
+            } catch (error) {
+                console.warn('Failed to send WebSocket message:', error);
+            }
         }
 
         // Save to backend
@@ -660,12 +668,17 @@ class TranslationApp {
     connectWebSocket() {
         const repoKey = `${this.currentRepo.owner}/${this.currentRepo.name}`;
 
-        this.ws = this.api.connectWebSocket(
-            repoKey,
-            this.currentLanguage,
-            (message) => this.handleWebSocketMessage(message),
-            (status) => this.handleWebSocketStatus(status)
-        );
+        try {
+            this.ws = this.api.connectWebSocket(
+                repoKey,
+                this.currentLanguage,
+                (message) => this.handleWebSocketMessage(message),
+                (status) => this.handleWebSocketStatus(status)
+            );
+        } catch (error) {
+            console.warn('WebSocket connection failed, continuing without real-time features:', error);
+            this.ws = null;
+        }
     }
 
     disconnectWebSocket() {
@@ -677,32 +690,52 @@ class TranslationApp {
 
     handleWebSocketMessage(data) {
         switch (data.type) {
-            case 'startEdit':
+            case 'connected':
+                console.log('WebSocket connected successfully');
+                break;
+                
+            case 'userStartedEditing':
                 // Another user started editing
-                if (data.user !== this.currentUser.name) {
-                    this.updateActiveEditor(data.msgid, data.user, true);
+                if (data.userId !== this.currentUser?.id) {
+                    this.updateActiveEditor(data.msgid, data.userName, true);
                 }
                 break;
 
-            case 'endEdit':
+            case 'userStoppedEditing':
                 // Another user stopped editing
-                if (data.user !== this.currentUser.name) {
-                    this.updateActiveEditor(data.msgid, data.user, false);
+                if (data.userId !== this.currentUser?.id) {
+                    this.updateActiveEditor(data.msgid, data.userName, false);
                 }
                 break;
 
             case 'translationUpdate':
                 // Another user saved a translation
-                if (data.userId !== this.currentUser.id) {
+                if (data.userId !== this.currentUser?.id) {
                     this.handleRemoteTranslationUpdate(data);
                 }
                 break;
+                
+            case 'pong':
+                // Heartbeat response - ignore
+                break;
+                
+            default:
+                console.log('Unknown WebSocket message type:', data.type);
         }
     }
 
     handleWebSocketStatus(status) {
         console.log('WebSocket status:', status);
-        // Could show connection status in UI
+        
+        if (status === 'error' || status === 'disconnected') {
+            // Attempt to reconnect after a delay, but don't block the UI
+            setTimeout(() => {
+                if (this.currentRepo && this.currentLanguage && !this.ws) {
+                    console.log('Attempting to reconnect WebSocket...');
+                    this.connectWebSocket();
+                }
+            }, 5000);
+        }
     }
 
     updateActiveEditor(msgid, user, isActive) {

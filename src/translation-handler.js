@@ -1,5 +1,3 @@
-// src/translation-handler.js - Updated with dynamic language detection and new language creation
-// src/translation-handler.js - Dynamic language detection and new language creation
 import { AuthHandler } from './auth-handler.js';
 
 class GitHubAPI {
@@ -117,7 +115,7 @@ export class TranslationHandler {
     static async getRepositories(request) {
         try {
             const cacheKey = 'repositories-config';
-            let repositories = await request.env.gander_social_translations.get(cacheKey, 'json');
+            let repositories = await request.env.KV_BINDING.get(cacheKey, 'json');
 
             if (!repositories || !repositories.data || repositories.expires < Date.now()) {
                 const defaultRepositories = [
@@ -130,10 +128,10 @@ export class TranslationHandler {
                     }
                 ];
 
-                const configuredRepos = await request.env.gander_social_translations.get('configured-repositories', 'json');
+                const configuredRepos = await request.env.KV_BINDING.get('configured-repositories', 'json');
                 repositories = configuredRepos || defaultRepositories;
 
-                await request.env.gander_social_translations.put(
+                await request.env.KV_BINDING.put(
                     cacheKey,
                     JSON.stringify({
                         data: repositories,
@@ -166,7 +164,7 @@ export class TranslationHandler {
             const [, owner, repo] = match;
 
             // Get repository configuration
-            const repositories = await request.env.gander_social_translations.get('configured-repositories', 'json') || [];
+            const repositories = await request.env.KV_BINDING.get('configured-repositories', 'json') || [];
             const repoConfig = repositories.find(r => r.owner === owner && r.name === repo);
 
             if (!repoConfig) {
@@ -237,7 +235,7 @@ export class TranslationHandler {
             const github = new GitHubAPI(request.session.githubToken);
 
             // Get repository configuration
-            const repositories = await request.env.gander_social_translations.get('configured-repositories', 'json') || [];
+            const repositories = await request.env.KV_BINDING.get('configured-repositories', 'json') || [];
             const repoConfig = repositories.find(r => r.owner === owner && r.name === repo);
 
             if (!repoConfig) {
@@ -276,7 +274,7 @@ export class TranslationHandler {
             );
 
             // Store language metadata
-            await request.env.gander_social_translations.put(
+            await request.env.KV_BINDING.put(
                 `language:${repository}:${languageCode}`,
                 JSON.stringify({
                     code: languageCode,

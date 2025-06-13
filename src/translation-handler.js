@@ -115,6 +115,8 @@ export class TranslationHandler {
     static async getRepositories(request) {
         try {
             const cacheKey = 'repositories-config';
+            const configKey = 'configured-repositories';
+            
             let repositories = await request.env.KV_BINDING.get(cacheKey, 'json');
 
             if (!repositories || !repositories.data || repositories.expires < Date.now()) {
@@ -128,9 +130,20 @@ export class TranslationHandler {
                     }
                 ];
 
-                const configuredRepos = await request.env.KV_BINDING.get('configured-repositories', 'json');
+                let configuredRepos = await request.env.KV_BINDING.get(configKey, 'json');
                 repositories = configuredRepos || defaultRepositories;
 
+                // If we're using default repositories, store them in the configured-repositories key
+                // so that getLanguages can find them
+                if (!configuredRepos) {
+                    await request.env.KV_BINDING.put(
+                        configKey,
+                        JSON.stringify(defaultRepositories),
+                        { expirationTtl: 86400 } // 24 hours
+                    );
+                }
+
+                // Cache the result
                 await request.env.KV_BINDING.put(
                     cacheKey,
                     JSON.stringify({
@@ -162,13 +175,45 @@ export class TranslationHandler {
             }
 
             const [, owner, repo] = match;
+            console.log(`Getting languages for ${owner}/${repo}`);
 
             // Get repository configuration
             const repositories = await request.env.KV_BINDING.get('configured-repositories', 'json') || [];
+            console.log('Available repositories:', repositories);
+            
             const repoConfig = repositories.find(r => r.owner === owner && r.name === repo);
+            console.log('Found repo config:', repoConfig);
 
             if (!repoConfig) {
-                return ApiResponse.error('Repository not found', 404, 'REPO_NOT_FOUND');
+                // If repository not found in config, but it's one of our expected repos, create a default config
+                if (owner === 'gander-foundation' && repo === 'social-app') {
+                    const defaultConfig = {
+                        owner: 'gander-foundation',
+                        name: 'social-app',
+                        description: 'Gander Social Application - Indigenous Language Support',
+                        translationPath: 'src/locale/locales',
+                        requiresAuth: true
+                    };
+                    
+                    // Store this default config for future use
+                    const updatedRepos = [...repositories, defaultConfig];
+                    await request.env.KV_BINDING.put(
+                        'configured-repositories',
+                        JSON.stringify(updatedRepos),
+                        { expirationTtl: 86400 }
+                    );
+                    
+                    console.log('Created default config for gander-foundation/social-app');
+                    
+                    // Use the default config
+                    return ApiResponse.success({
+                        languages: ['cr', 'iu', 'oj', 'miq', 'innu'],
+                        canCreateNew: !!request.session.githubToken,
+                        translationPath: defaultConfig.translationPath
+                    });
+                }
+                
+                return ApiResponse.error(`Repository ${owner}/${repo} not found in configuration`, 404, 'REPO_NOT_FOUND');
             }
 
             // If user has GitHub token, fetch actual languages from repository
@@ -183,6 +228,8 @@ export class TranslationHandler {
                             .filter(item => item.type === 'dir' && item.name !== 'en')
                             .map(item => item.name);
 
+                        console.log('Languages from GitHub:', languages);
+
                         return ApiResponse.success({
                             languages,
                             canCreateNew: true,
@@ -191,6 +238,7 @@ export class TranslationHandler {
                     }
                 } catch (error) {
                     console.error('Error fetching languages from GitHub:', error);
+                    // Continue to fallback below
                 }
             }
 
@@ -203,6 +251,7 @@ export class TranslationHandler {
             `).bind(`${owner}/${repo}`).all();
 
             const languages = storedLanguages.results?.map(r => r.language_code) || ['cr', 'iu', 'oj', 'miq', 'innu'];
+            console.log('Fallback languages:', languages);
 
             return ApiResponse.success({
                 languages,
@@ -212,7 +261,10 @@ export class TranslationHandler {
 
         } catch (error) {
             console.error('Error getting languages:', error);
-            return ApiResponse.error('Failed to retrieve languages', 500, 'LANG_FETCH_ERROR');
+            return ApiResponse.error('Failed to retrieve languages', 500, 'LANG_FETCH_ERROR', { 
+                message: error.message,
+                stack: error.stack 
+            });
         }
     }
 

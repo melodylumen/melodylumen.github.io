@@ -482,6 +482,36 @@ input[type="text"], input[type="password"], input[type="email"] {
     color: #e67e22;
 }
 
+/* Language switcher */
+.language-switcher {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+}
+
+.language-switcher label {
+    color: #7f8c8d;
+    margin: 0;
+}
+
+.language-switcher select {
+    padding: 5px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    min-width: 200px;
+}
+
+/* Pending changes notice */
+.pending-changes-notice {
+    margin: 15px 0;
+}
+
+.pending-changes-notice p {
+    margin: 0;
+}
+
 /* Changes modal */
 #changes-modal {
     display: none;

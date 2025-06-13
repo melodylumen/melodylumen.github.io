@@ -15,9 +15,9 @@ INSERT INTO users (id, email, name, github_username, auth_method, created_at) VA
 
 -- Insert test sessions
 INSERT INTO translation_sessions (id, user_id, repository, language_code, started_at) VALUES
-                                                                                          ('session-alice-fr', 'user-alice-123', 'gander-foundation/social-app', 'fr', datetime('now', '-2 hours')),
-                                                                                          ('session-bob-es', 'user-bob-456', 'gander-foundation/social-app', 'es', datetime('now', '-1 hour')),
-                                                                                          ('session-alice-cr', 'user-alice-123', 'gander-foundation/social-app', 'cr', datetime('now', '-30 minutes'));
+                                                                                          ('session-alice-fr', 'user-alice-123', 'gander-social/social-app', 'fr', datetime('now', '-2 hours')),
+                                                                                          ('session-bob-es', 'user-bob-456', 'gander-social/social-app', 'es', datetime('now', '-1 hour')),
+                                                                                          ('session-alice-cr', 'user-alice-123', 'gander-social/social-app', 'cr', datetime('now', '-30 minutes'));
 
 -- Insert test translation progress
 INSERT INTO translation_progress

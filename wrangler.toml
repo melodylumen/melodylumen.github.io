@@ -6,40 +6,58 @@ compatibility_flags = ["nodejs_compat"]
 # Environment variables
 [vars]
 FRONTEND_URL = "https://melodylumen.github.io"
-JWT_SECRET = "${JWT_SECRET}"
+ENVIRONMENT = "production"
 
-# KV namespace for session storage
+# Secrets (set these using wrangler secret put)
+# JWT_SECRET - set via: wrangler secret put JWT_SECRET
+# GITHUB_APP_TOKEN - set via: wrangler secret put GITHUB_APP_TOKEN
+
+# KV namespace for session storage and configuration
 [[kv_namespaces]]
 binding = "KV_BINDING"
 id = "077b9a43f68c49a986cecae95ebf5f41"
-preview_id = "077b9a43f68c49a986cecae95ebf5f41" # Use same ID for local dev
+preview_id = "077b9a43f68c49a986cecae95ebf5f41"
 
-# D1 Database
+# D1 Database for translation storage
 [[d1_databases]]
 binding = "DB"
 database_name = "gander_social_translation_tool"
 database_id = "65d4272a-e117-4737-a94b-b7d92f1e96a2"
 
-# Durable Objects for WebSocket handling
+# Durable Objects for real-time WebSocket handling
 [durable_objects]
 bindings = [
     { name = "TRANSLATION_ROOMS", class_name = "TranslationRoom" }
 ]
 
-# Development settings
-[dev]
-port = 8787
-local_protocol = "http"
+# Development settings for local testing
+[env.development]
+vars = { FRONTEND_URL = "http://localhost:8000", ENVIRONMENT = "development" }
+
+# Production environment settings
+[env.production]
+vars = { FRONTEND_URL = "https://melodylumen.github.io", ENVIRONMENT = "production" }
 
 # Build configuration
 [build]
 command = "npm install"
 
-# Migrations for Durable Objects
+# Durable Objects migrations
 [[migrations]]
-tag = "v4"
+tag = "v5"
 new_sqlite_classes = ["TranslationRoom"]
 
-# wrangler.toml (wrangler v3.88.0^)
-[observability.logs]
+# Enable observability
+[observability]
 enabled = true
+
+# Route configuration (optional - only if using custom domain)
+# routes = [
+#   { pattern = "translations.gander.social/*", zone_name = "gander.social" }
+# ]
+
+# Development server settings
+[dev]
+port = 8787
+local_protocol = "http"
+persist = true

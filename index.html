@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PO Translation Tool</title>
     <link rel="stylesheet" href="styles/main.css">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
 </head>
 <body>
 <div class="container">
@@ -67,8 +71,14 @@
         <div id="translation-workspace" style="display: none;">
             <div class="workspace-header">
                 <div>
-                    <button onclick="app.backToLanguages()" class="btn-secondary">← Back</button>
+                    <button onclick="app.backToLanguages()" class="btn-secondary">← Back to Languages</button>
                     <h2 id="workspace-title">Translations</h2>
+                    <div class="language-switcher" style="margin-top: 10px;">
+                        <label for="current-language-select">Switch Language:</label>
+                        <select id="current-language-select" onchange="app.switchLanguage(this.value)">
+                            <!-- Languages will be populated here -->
+                        </select>
+                    </div>
                 </div>
                 <div class="workspace-controls">
                     <div class="change-counter">
@@ -134,5 +144,14 @@ if (window.location.hostname === 'localhost' || window.location.hostname === '12
 <script src="scripts/api-client.js"></script>
 <script src="scripts/translation-manager.js"></script>
 <script src="scripts/app.js"></script>
+<script>
+    // Simple fallback to prevent favicon 404 errors
+    if (!document.querySelector('link[rel="icon"]')) {
+        const link = document.createElement('link');
+        link.rel = 'icon';
+        link.href = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIGZpbGw9IiMyNTYzZWIiIHJ4PSI0Ii8+CiAgPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTIiIGZpbGw9IiMxZDRlZDgiLz4KICA8dGV4dCB4PSIxNiIgeT0iMjIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZvbnQtd2VpZ2h0PSJib2xkIj5QPC90ZXh0Pgo8L3N2Zz4K';
+        document.head.appendChild(link);
+    }
+</script>
 </body>
 </html>

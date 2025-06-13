@@ -20,10 +20,10 @@ describe('API Endpoints', () => {
     });
 
     it('should handle repository paths', () => {
-        const repoPath = 'gander-foundation/social-app';
+        const repoPath = 'gander-social/social-app';
         const [owner, repo] = repoPath.split('/');
         
-        expect(owner).toBe('gander-foundation');
+        expect(owner).toBe('gander-social');
         expect(repo).toBe('social-app');
     });
 });

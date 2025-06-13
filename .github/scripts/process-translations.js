@@ -214,7 +214,7 @@ function generatePRBody(payload) {
     });
 
     body += `---\n`;
-    body += `_This PR was automatically created by the [PO Translation Tool](https://github.com/gander-foundation/po-translation-tool) via GitHub Actions_`;
+    body += `_This PR was automatically created by the [PO Translation Tool](https://github.com/gander-social/po-translation-tool) via GitHub Actions_`;
 
     return body;
 }

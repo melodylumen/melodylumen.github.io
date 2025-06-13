@@ -3,7 +3,6 @@ import { Router } from 'itty-router';
 import { DatabaseHelper } from './db-helper.js';
 import { AuthHandler } from './auth-handler.js';
 import { TranslationHandler } from './translation-handler.js';
-import { WebSocketHandler } from './websocket-handler.js';
 import { TranslationRoom } from './translation-room.js';
 
 // Export the Durable Object class

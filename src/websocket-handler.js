@@ -10,7 +10,7 @@ export class WebSocketHandler {
         }
 
         // Verify session token
-        const session = await request.env.gander_social_translations.get(
+        const session = await request.env.KV_BINDING.get(
             `session:${token}`,
             'json'
         );
@@ -37,7 +37,7 @@ export class WebSocketHandler {
         };
 
         // Store in KV for broadcasting
-        await request.env.gander_social_translations.put(
+        await request.env.KV_BINDING.put(
             `ws:${connectionId}`,
             JSON.stringify(connectionInfo),
             { expirationTtl: 3600 } // 1 hour
@@ -50,7 +50,7 @@ export class WebSocketHandler {
 
         // Handle close
         server.addEventListener('close', async () => {
-            await request.env.gander_social_translations.delete(`ws:${connectionId}`);
+            await request.env.KV_BINDING.delete(`ws:${connectionId}`);
         });
 
         return new Response(null, {
@@ -120,6 +120,3 @@ export class WebSocketHandler {
         console.log('WebSocket closed:', { code, reason, wasClean });
     }
 }
-
-// Note: For production use, implement a Durable Object for WebSocket handling
-// This provides just the basic structure

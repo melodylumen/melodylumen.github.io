@@ -67,8 +67,14 @@
         <div id="translation-workspace" style="display: none;">
             <div class="workspace-header">
                 <div>
-                    <button onclick="app.backToLanguages()" class="btn-secondary">← Back</button>
+                    <button onclick="app.backToLanguages()" class="btn-secondary">← Back to Languages</button>
                     <h2 id="workspace-title">Translations</h2>
+                    <div class="language-switcher" style="margin-top: 10px;">
+                        <label for="current-language-select">Switch Language:</label>
+                        <select id="current-language-select" onchange="app.switchLanguage(this.value)">
+                            <!-- Languages will be populated here -->
+                        </select>
+                    </div>
                 </div>
                 <div class="workspace-controls">
                     <div class="change-counter">

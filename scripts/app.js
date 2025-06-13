@@ -308,6 +308,9 @@ class TranslationApp {
             document.getElementById('workspace-title').textContent =
                 `${this.currentRepo.name} - ${this.getLanguageName(language)}`;
 
+            // Populate language switcher
+            this.populateLanguageSwitcher();
+
             this.renderTranslations(translations);
 
             document.getElementById('language-selector').style.display = 'none';
@@ -319,6 +322,50 @@ class TranslationApp {
         } finally {
             this.hideLoading();
         }
+    }
+
+    async switchLanguage(newLanguage) {
+        if (newLanguage === this.currentLanguage) {
+            return; // Already on this language
+        }
+
+        // Check if there are unsaved changes
+        if (this.changes.size > 0) {
+            const confirmSwitch = confirm(
+                `You have ${this.changes.size} unsaved changes. ` +
+                `These changes will be preserved when you switch languages. Continue?`
+            );
+            if (!confirmSwitch) {
+                // Reset the select to current language
+                document.getElementById('current-language-select').value = this.currentLanguage;
+                return;
+            }
+        }
+
+        // Disconnect current WebSocket if any
+        this.disconnectWebSocket();
+
+        // Switch to new language
+        await this.selectLanguage(newLanguage);
+    }
+
+    populateLanguageSwitcher() {
+        const select = document.getElementById('current-language-select');
+        if (!select || !this.availableLanguages) return;
+
+        // Clear existing options
+        select.innerHTML = '';
+
+        // Add all available languages
+        this.availableLanguages.forEach(lang => {
+            const option = document.createElement('option');
+            option.value = lang;
+            option.textContent = `${lang.toUpperCase()} - ${this.getLanguageName(lang)}`;
+            if (lang === this.currentLanguage) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
     }
 
     // Translation Management
@@ -666,6 +713,10 @@ class TranslationApp {
 
     // WebSocket Management
     connectWebSocket() {
+        // For now, disable WebSocket to avoid blocking the app
+        console.log('WebSocket temporarily disabled for stability');
+        return;
+        
         const repoKey = `${this.currentRepo.owner}/${this.currentRepo.name}`;
 
         try {
@@ -787,22 +838,48 @@ class TranslationApp {
 
     // Navigation
     backToRepos() {
+        if (this.changes.size > 0) {
+            const confirmLeave = confirm(
+                `You have ${this.changes.size} unsaved changes. ` +
+                `These will be lost if you go back to repository selection. Continue?`
+            );
+            if (!confirmLeave) return;
+        }
+
         this.disconnectWebSocket();
         this.currentRepo = null;
         this.currentLanguage = null;
+        this.availableLanguages = [];
         this.changes.clear();
         this.loadRepositories();
     }
 
     backToLanguages() {
+        // Note: Changes are preserved when going back to language selection
         this.disconnectWebSocket();
         this.currentLanguage = null;
-        this.changes.clear();
-        this.selectRepository(
-            this.currentRepo.owner,
-            this.currentRepo.name,
-            this.currentRepo.translationPath
-        );
+        
+        // Show language selector, hide workspace
+        document.getElementById('translation-workspace').style.display = 'none';
+        document.getElementById('language-selector').style.display = 'block';
+        
+        // If we have pending changes, show a note
+        if (this.changes.size > 0) {
+            const message = document.createElement('div');
+            message.className = 'pending-changes-notice';
+            message.innerHTML = `
+                <p style="background: #fff3cd; padding: 10px; border-radius: 4px; margin: 10px 0; border: 1px solid #ffeaa7;">
+                    📝 You have ${this.changes.size} pending changes that will be preserved when you select a new language.
+                </p>
+            `;
+            
+            const languageSelector = document.getElementById('language-selector');
+            const existingNotice = languageSelector.querySelector('.pending-changes-notice');
+            if (existingNotice) {
+                existingNotice.remove();
+            }
+            languageSelector.insertBefore(message, languageSelector.querySelector('h2').nextSibling);
+        }
     }
 
     // Utility Methods

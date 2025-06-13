@@ -71,26 +71,63 @@ router.post('/api/translations/submit-pr', TranslationHandler.submitPR);
 
 // WebSocket endpoint
 router.get('/api/ws', async (request, env) => {
-    const upgradeHeader = request.headers.get('Upgrade');
-    if (!upgradeHeader || upgradeHeader !== 'websocket') {
-        return new Response('Expected Upgrade: websocket', { status: 426 });
+    try {
+        const upgradeHeader = request.headers.get('Upgrade');
+        if (!upgradeHeader || upgradeHeader !== 'websocket') {
+            return new Response('Expected Upgrade: websocket', { status: 426 });
+        }
+
+        const url = new URL(request.url);
+        const repo = url.searchParams.get('repo');
+        const language = url.searchParams.get('language');
+        const sessionId = url.searchParams.get('sessionId');
+
+        if (!repo || !language) {
+            return new Response('Missing repo or language parameters', { status: 400 });
+        }
+
+        if (!sessionId) {
+            return new Response('Missing session ID', { status: 400 });
+        }
+
+        // Validate session and get user info
+        let session;
+        try {
+            session = await env.KV_BINDING.get(`session:${sessionId}`, 'json');
+            if (!session || new Date(session.expiresAt) < new Date()) {
+                return new Response('Invalid or expired session', { status: 401 });
+            }
+        } catch (error) {
+            console.error('Session validation error:', error);
+            return new Response('Session validation failed', { status: 401 });
+        }
+
+        // Create room ID from repo and language
+        const roomId = `${repo}:${language}`;
+        const id = env.TRANSLATION_ROOMS.idFromName(roomId);
+        const room = env.TRANSLATION_ROOMS.get(id);
+
+        // Add session info to the request URL for the Durable Object
+        const modifiedUrl = new URL(request.url);
+        modifiedUrl.searchParams.set('userId', session.userId);
+        modifiedUrl.searchParams.set('sessionData', JSON.stringify({
+            userId: session.userId,
+            authMethod: session.authMethod
+        }));
+
+        // Create a new request with the modified URL
+        const modifiedRequest = new Request(modifiedUrl.toString(), {
+            method: request.method,
+            headers: request.headers,
+            body: request.body
+        });
+
+        // Forward the request to the Durable Object
+        return room.fetch(modifiedRequest);
+    } catch (error) {
+        console.error('WebSocket endpoint error:', error);
+        return new Response('Internal server error', { status: 500 });
     }
-
-    const url = new URL(request.url);
-    const repo = url.searchParams.get('repo');
-    const language = url.searchParams.get('language');
-
-    if (!repo || !language) {
-        return new Response('Missing repo or language parameters', { status: 400 });
-    }
-
-    // Create room ID from repo and language
-    const roomId = `${repo}:${language}`;
-    const id = env.TRANSLATION_ROOMS.idFromName(roomId);
-    const room = env.TRANSLATION_ROOMS.get(id);
-
-    // Forward the request to the Durable Object
-    return room.fetch(request);
 });
 
 // Health check

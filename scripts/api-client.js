@@ -266,9 +266,7 @@ class APIClient {
         const params = new URLSearchParams({
             repo,
             language,
-            sessionId: this.sessionToken,
-            userId: this.userId || 'unknown',
-            userName: this.userName || 'Unknown User'
+            sessionId: this.sessionToken || 'no-session'
         });
 
         const ws = new WebSocket(`${wsUrl}/api/ws?${params}`);
@@ -281,6 +279,7 @@ class APIClient {
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+                console.log('WebSocket message:', data);
                 onMessage && onMessage(data);
             } catch (error) {
                 console.error('Error parsing WebSocket message:', error);
@@ -292,8 +291,8 @@ class APIClient {
             onStatusChange && onStatusChange('error');
         };
 
-        ws.onclose = () => {
-            console.log('WebSocket disconnected');
+        ws.onclose = (event) => {
+            console.log('WebSocket disconnected:', event.code, event.reason);
             onStatusChange && onStatusChange('disconnected');
         };
 

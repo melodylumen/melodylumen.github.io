@@ -64,7 +64,7 @@
       "cors": {
         "allowedOrigins": [
           "https://melodylumen.github.io",
-          "https://gander-foundation.github.io",
+          "https://gander-social.github.io",
           "https://gander.social"
         ]
       }

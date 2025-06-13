@@ -133,7 +133,7 @@ export class TranslationHandler {
     static async getRepositories(request) {
         const repositories = [
             {
-                owner: 'gander-foundation',
+                owner: 'gander-social',
                 name: 'social-app',
                 description: 'Gander Social Application - Indigenous Language Support',
                 translationPath: 'src/locale/locales',

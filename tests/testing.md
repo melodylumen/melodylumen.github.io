@@ -64,7 +64,7 @@ You'll need a real GitHub Personal Access Token with `repo` scope:
 ### 1. Basic Translation Flow
 1. Open http://localhost:8000
 2. Login with token `DEV-TOKEN-123`
-3. Select "gander-foundation/social-app" repository
+3. Select "gander-social/social-app" repository
 4. Choose a language (e.g., French)
 5. Edit translations
 6. Click "Submit PR"

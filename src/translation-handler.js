@@ -1,4 +1,6 @@
 import { AuthHandler } from './auth-handler.js';
+import { POFileHandler, TranslationPaginator } from './po-file-handler.js';
+
 
 class GitHubAPI {
     constructor(token) {
@@ -162,6 +164,9 @@ export class TranslationHandler {
         }
     }
 
+    /**
+     * Get languages with efficient directory listing
+     */
     static async getLanguages(request) {
         try {
             await AuthHandler.requireAuth(request);
@@ -174,138 +179,280 @@ export class TranslationHandler {
             }
 
             const [, owner, repo] = match;
-            console.log(`Getting languages for ${owner}/${repo}`);
 
             // Get repository configuration
-            const repositories = await request.env.KV_BINDING.get('configured-repositories', 'json') || [];
-            console.log('Available repositories:', repositories);
-
-            let repoConfig = repositories.find(r => r.owner === owner && r.name === repo);
-            console.log('Found repo config:', repoConfig);
+            const repositories = await request.env.gander_social_translations.get('configured-repositories', 'json') || [];
+            const repoConfig = repositories.find(r => r.owner === owner && r.name === repo);
 
             if (!repoConfig) {
-                // If repository not found in config, but it's one of our expected repos, create a default config
-                if (owner === 'melodylumen' && repo === 'social-app') {
-                    const defaultConfig = {
-                        owner: owner, // Use the owner from the request
-                        name: 'social-app',
-                        description: 'Gander Social Application - Indigenous Language Support',
-                        translationPath: 'src/locale/locales',
-                        requiresAuth: true
-                    };
-
-                    // Store this default config for future use
-                    const updatedRepos = [...repositories, defaultConfig];
-                    await request.env.KV_BINDING.put(
-                        'configured-repositories',
-                        JSON.stringify(updatedRepos),
-                        { expirationTtl: 86400 }
-                    );
-
-                    console.log(`Created default config for ${owner}/${repo}`);
-                    repoConfig = defaultConfig;
-                } else {
-                    return ApiResponse.error(`Repository ${owner}/${repo} not found in configuration`, 404, 'REPO_NOT_FOUND');
-                }
+                return ApiResponse.error('Repository not found', 404, 'REPO_NOT_FOUND');
             }
-
-            let languages = [];
-            let canCreateNew = false;
 
             // If user has GitHub token, fetch actual languages from repository
             if (request.session.githubToken) {
                 try {
-                    console.log('Fetching languages from GitHub with token');
                     const github = new GitHubAPI(request.session.githubToken);
+                    const poHandler = new POFileHandler(github);
 
-                    // Get the contents of the locales directory
-                    const contents = await github.getContent(owner, repo, repoConfig.translationPath, 'main');
-                    console.log('GitHub API response:', contents);
+                    // Get language directories efficiently
+                    const languages = await poHandler.getAvailableLanguages(
+                        owner,
+                        repo,
+                        repoConfig.translationPath
+                    );
 
-                    if (contents && Array.isArray(contents)) {
-                        // Filter for directories that contain language folders
-                        languages = contents
-                            .filter(item => {
-                                console.log('Checking item:', item.name, item.type);
-                                return item.type === 'dir' &&
-                                    item.name !== '.git' &&
-                                    item.name !== 'node_modules' &&
-                                    item.name.length <= 10; // Language codes are typically short
-                            })
-                            .map(item => item.name)
-                            .sort();
+                    // For each language, get basic metadata (cached)
+                    const languageMetadata = await Promise.all(
+                        languages.map(async (lang) => {
+                            // Check cache first
+                            const cacheKey = `lang-meta:${owner}/${repo}:${lang.code}`;
+                            let metadata = await request.env.gander_social_translations.get(cacheKey, 'json');
 
-                        console.log('Languages from GitHub:', languages);
-                        canCreateNew = true;
-                    } else if (contents && contents.type === 'file') {
-                        // If the path points to a file instead of directory, check parent
-                        console.log('Path points to file, checking parent directory');
-                        const parentPath = repoConfig.translationPath.split('/').slice(0, -1).join('/');
-                        const parentContents = await github.getContent(owner, repo, parentPath, 'main');
+                            if (!metadata || metadata.expires < Date.now()) {
+                                // Fetch fresh metadata
+                                metadata = await poHandler.getLanguageMetadata(
+                                    owner,
+                                    repo,
+                                    lang.code,
+                                    repoConfig.translationPath
+                                );
 
-                        if (parentContents && Array.isArray(parentContents)) {
-                            const localesDir = parentContents.find(item => item.name === 'locales' && item.type === 'dir');
-                            if (localesDir) {
-                                const localesContents = await github.getContent(owner, repo, localesDir.path, 'main');
-                                if (localesContents && Array.isArray(localesContents)) {
-                                    languages = localesContents
-                                        .filter(item => item.type === 'dir' && item.name.length <= 10)
-                                        .map(item => item.name)
-                                        .sort();
-                                }
+                                // Cache for 1 hour
+                                await request.env.gander_social_translations.put(
+                                    cacheKey,
+                                    JSON.stringify({
+                                        ...metadata,
+                                        expires: Date.now() + 3600000
+                                    }),
+                                    { expirationTtl: 3600 }
+                                );
                             }
-                        }
-                    }
+
+                            return {
+                                code: lang.code,
+                                name: metadata.languageName || lang.name,
+                                path: lang.path,
+                                metadata
+                            };
+                        })
+                    );
+
+                    return ApiResponse.success({
+                        languages: languageMetadata,
+                        canCreateNew: true,
+                        translationPath: repoConfig.translationPath
+                    });
                 } catch (error) {
                     console.error('Error fetching languages from GitHub:', error);
-                    // Continue to fallback below
+                    // Fall back to stored data
                 }
             }
 
-            // If we didn't get languages from GitHub, try database fallback
-            if (languages.length === 0) {
-                console.log('Falling back to database languages');
-                try {
-                    const storedLanguages = await request.db.db.prepare(`
-                        SELECT DISTINCT language_code
-                        FROM translation_sessions
-                        WHERE repository = ?
-                        ORDER BY language_code
-                    `).bind(`${owner}/${repo}`).all();
+            // Fallback to database stored languages
+            const storedLanguages = await request.db.db.prepare(`
+                SELECT DISTINCT 
+                    ts.language_code,
+                    COUNT(DISTINCT tp.msgid) as translation_count,
+                    MAX(tp.completed_at) as last_activity
+                FROM translation_sessions ts
+                LEFT JOIN translation_progress tp ON ts.id = tp.session_id
+                WHERE ts.repository = ?
+                GROUP BY ts.language_code
+                ORDER BY ts.language_code
+            `).bind(`${owner}/${repo}`).all();
 
-                    languages = storedLanguages.results?.map(r => r.language_code) || [];
-                } catch (dbError) {
-                    console.error('Database fallback failed:', dbError);
-                }
-            }
-
-            // If still no languages, use defaults based on repository
-            if (languages.length === 0) {
-                console.log('Using default languages');
-                if (owner === 'melodylumen') {
-                    // Default Indigenous languages for Gander Social
-                    languages = ['cr', 'iu', 'oj', 'miq', 'innu', 'fr'];
-                } else {
-                    // Common languages for other repositories
-                    languages = ['fr', 'es', 'de', 'pt', 'it'];
-                }
-            }
-
-            console.log('Final languages list:', languages);
+            const languages = storedLanguages.results?.map(r => ({
+                code: r.language_code,
+                name: this.getStoredLanguageName(r.language_code),
+                translationCount: r.translation_count,
+                lastActivity: r.last_activity
+            })) || ['cr', 'iu', 'oj', 'miq', 'innu'].map(code => ({
+                code,
+                name: this.getStoredLanguageName(code),
+                translationCount: 0
+            }));
 
             return ApiResponse.success({
                 languages,
-                canCreateNew,
+                canCreateNew: !!request.session.githubToken,
                 translationPath: repoConfig.translationPath
             });
 
         } catch (error) {
             console.error('Error getting languages:', error);
-            return ApiResponse.error('Failed to retrieve languages', 500, 'LANG_FETCH_ERROR', {
-                message: error.message,
-                stack: error.stack
-            });
+            return ApiResponse.error('Failed to retrieve languages', 500, 'LANG_FETCH_ERROR');
         }
+    }
+
+    /**
+     * Get translations with pagination support
+     */
+    static async getTranslations(request) {
+        try {
+            await AuthHandler.requireAuth(request);
+
+            const url = new URL(request.url);
+            const match = url.pathname.match(/\/api\/translations\/([^\/]+)\/([^\/]+)/);
+
+            if (!match) {
+                return ApiResponse.error('Invalid translation path', 400, 'INVALID_PATH');
+            }
+
+            const [, encodedRepo, language] = match;
+            const repo = decodeURIComponent(encodedRepo);
+
+            // Get pagination parameters
+            const page = parseInt(url.searchParams.get('page') || '0');
+            const pageSize = parseInt(url.searchParams.get('pageSize') || '50');
+            const search = url.searchParams.get('search');
+
+            // Get or create session
+            const session = await request.db.getActiveSession(
+                request.userId,
+                repo,
+                language
+            );
+
+            let sessionId = session?.id;
+            if (!sessionId) {
+                sessionId = await request.db.createSession(request.userId, repo, language);
+            }
+
+            // If user has GitHub access, load from GitHub with pagination
+            if (request.session.githubToken) {
+                const [owner, repoName] = repo.split('/');
+                const repositories = await request.env.gander_social_translations.get('configured-repositories', 'json') || [];
+                const repoConfig = repositories.find(r => r.owner === owner && r.name === repoName);
+
+                if (repoConfig) {
+                    const github = new GitHubAPI(request.session.githubToken);
+                    const poHandler = new POFileHandler(github);
+                    const paginator = new TranslationPaginator(
+                        poHandler,
+                        owner,
+                        repoName,
+                        language,
+                        repoConfig.translationPath
+                    );
+
+                    let result;
+                    if (search) {
+                        // Search mode
+                        const searchResults = await paginator.search(search, pageSize);
+                        result = {
+                            page: 0,
+                            pageSize,
+                            translations: searchResults,
+                            hasMore: false,
+                            totalResults: searchResults.length
+                        };
+                    } else {
+                        // Pagination mode
+                        result = await paginator.getPage(page);
+                    }
+
+                    // Get saved translations from database for this page
+                    const savedTranslations = await request.db.getTranslationProgress(sessionId);
+                    const savedMap = new Map(
+                        savedTranslations.map(t => [t.msgid, t])
+                    );
+
+                    // Merge with saved translations
+                    const translations = {};
+                    result.translations.forEach(entry => {
+                        const saved = savedMap.get(entry.msgid);
+                        translations[entry.msgid] = {
+                            original: entry.msgid,
+                            current: saved?.translated_text || entry.msgstr,
+                            previous: saved?.previous_translation || entry.msgstr,
+                            context: entry.context,
+                            references: entry.references,
+                            flags: entry.flags,
+                            lineNumber: entry.lineNumber
+                        };
+                    });
+
+                    return ApiResponse.success({
+                        sessionId,
+                        language,
+                        translations,
+                        pagination: {
+                            page: result.page,
+                            pageSize: result.pageSize,
+                            hasMore: result.hasMore,
+                            totalResults: result.totalResults
+                        },
+                        metadata: {
+                            repository: repo,
+                            source: 'github'
+                        }
+                    });
+                }
+            }
+
+            // Fallback to database translations with pagination
+            const offset = page * pageSize;
+            const progress = await request.db.db.prepare(`
+                SELECT * FROM translation_progress
+                WHERE session_id = ?
+                ORDER BY msgid
+                LIMIT ? OFFSET ?
+            `).bind(sessionId, pageSize, offset).all();
+
+            // Get total count for pagination
+            const countResult = await request.db.db.prepare(`
+                SELECT COUNT(*) as total FROM translation_progress
+                WHERE session_id = ?
+            `).bind(sessionId).first();
+
+            const translations = {};
+            progress.results?.forEach(item => {
+                translations[item.msgid] = {
+                    original: item.original_text,
+                    current: item.translated_text,
+                    previous: item.previous_translation
+                };
+            });
+
+            return ApiResponse.success({
+                sessionId,
+                language,
+                translations,
+                pagination: {
+                    page,
+                    pageSize,
+                    hasMore: offset + pageSize < countResult.total,
+                    total: countResult.total
+                },
+                metadata: {
+                    repository: repo,
+                    source: 'database'
+                }
+            });
+
+        } catch (error) {
+            console.error('Error getting translations:', error);
+            return ApiResponse.error(
+                error.message || 'Failed to retrieve translations',
+                error.message === 'Unauthorized' ? 401 : 500,
+                'TRANSLATION_FETCH_ERROR'
+            );
+        }
+    }
+
+    /**
+     * Get stored language name
+     */
+    static getStoredLanguageName(code) {
+        const names = {
+            'cr': 'Cree (ᓀᐦᐃᔭᐍᐏᐣ)',
+            'iu': 'Inuktitut (ᐃᓄᒃᑎᑐᑦ)',
+            'oj': 'Ojibwe (ᐊᓂᔑᓈᐯᒧᐎᓐ)',
+            'miq': "Mi'kmaq",
+            'innu': 'Innu-aimun',
+            // ... add more as needed
+        };
+        return names[code] || code.toUpperCase();
     }
 
     static async createLanguage(request) {

@@ -7,6 +7,8 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 FRONTEND_URL = "https://melodylumen.github.io"
 ENVIRONMENT = "production"
+GITHUB_APP_NAME = "gander-social-translation-tool"
+GITHUB_OAUTH_CALLBACK_URL = "https://melodylumen.github.io/auth/callback"
 
 # Secrets (set these using wrangler secret put)
 # JWT_SECRET - set via: wrangler secret put JWT_SECRET

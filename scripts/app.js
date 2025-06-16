@@ -1,7 +1,8 @@
-// scripts/app.js - Updated with pagination and efficient loading
+// scripts/app.js - Updated with GitHub App OAuth support
 class TranslationApp {
     constructor() {
         this.api = new APIClient();
+        this.translationManager = new TranslationManager(this.api);
         this.currentUser = null;
         this.currentRepo = null;
         this.currentLanguage = null;
@@ -9,6 +10,36 @@ class TranslationApp {
         this.canCreateLanguage = false;
         this.ws = null;
         this.changes = new Map();
+
+        // Check for OAuth callback
+        this.checkOAuthCallback();
+    }
+
+    async init() {
+        // Check for existing session
+        if (this.api.sessionToken) {
+            try {
+                const validation = await this.api.validateSession();
+                if (validation.valid) {
+                    this.currentUser = validation.user;
+                    this.showApp();
+                    return;
+                }
+            } catch (error) {
+                console.error('Session validation failed:', error);
+                this.api.clearSession();
+            }
+        }
+
+        // Show auth screen
+        this.showAuth();
+    }
+
+    // Check if we're returning from GitHub OAuth
+    checkOAuthCallback() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const state = urlParams.get('state');
 
         // Pagination state
         this.currentPage = 0;
@@ -22,6 +53,46 @@ class TranslationApp {
         this.searchMode = false;
         this.searchTerm = '';
         this.searchDebounceTimer = null;
+
+        if (code && state) {
+            this.handleOAuthCallback(code, state);
+        }
+    }
+
+    async handleOAuthCallback(code, state) {
+        try {
+            this.showLoading('Completing GitHub authentication...');
+
+            // Complete OAuth flow
+            const result = await this.api.completeGitHubOAuth(code, state);
+
+            if (result.success) {
+                this.currentUser = result.user;
+
+                // Clear URL parameters
+                window.history.replaceState({}, document.title, window.location.pathname);
+
+                // Check if user is admin
+                if (result.user.isAdmin) {
+                    this.showAdminPrompt();
+                } else {
+                    this.showApp();
+                }
+            }
+        } catch (error) {
+            alert(`Authentication failed: ${error.message}`);
+            this.showAuth();
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    showAdminPrompt() {
+        if (confirm('You have admin privileges. Would you like to go to the admin dashboard?')) {
+            window.location.href = '/admin.html';
+        } else {
+            this.showApp();
+        }
     }
 
     // ... (keep existing init, auth, and other methods)
@@ -374,10 +445,143 @@ window.APIClient.prototype.getTranslations = async function(repo, language, page
         params.append('search', search);
     }
 
+        // Fallback to known languages
+        const names = {
+            'cr': 'Cree (ᓀᐦᐃᔭᐍᐏᐣ)',
+            'iu': 'Inuktitut (ᐃᓄᒃᑎᑐᑦ)',
+            'oj': 'Ojibwe (ᐊᓂᔑᓈᐯᒧᐎᓐ)',
+            'miq': "Mi'kmaq",
+            'innu': 'Innu-aimun',
+            'fr': 'French',
+            'es': 'Spanish',
+            'de': 'German',
+            'pt': 'Portuguese',
+            'it': 'Italian',
+            'ja': 'Japanese',
+            'ko': 'Korean',
+            'zh': 'Chinese',
+            'en': 'English'
+        };
+        return names[code] || code.toUpperCase();
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+    }
+}
+
+// Add pagination styles
+const style = document.createElement('style');
+style.textContent = `
+.pagination-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin: 20px 0;
+}
+
+.pagination-controls.top {
+    margin-bottom: 20px;
+}
+
+.pagination-controls.bottom {
+    margin-top: 20px;
+}
+
+.pagination-info {
+    color: #666;
+    font-size: 14px;
+}
+
+.pagination-buttons {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.pagination-buttons button {
+    padding: 8px 16px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.pagination-buttons button:hover:not(:disabled) {
+    background: #2980b9;
+}
+
+.pagination-buttons button:disabled {
+    background: #bdc3c7;
+    cursor: not-allowed;
+}
+
+.page-number {
+    font-weight: 500;
+    color: #2c3e50;
+}
+
+.loading-more {
+    text-align: center;
+    padding: 20px;
+    color: #7f8c8d;
+}
+
+.loading-more .spinner {
+    margin: 0 auto;
+}
+`;
+document.head.appendChild(style);
+
+// Updated API Client additions
+APIClient.prototype.initiateGitHubOAuth = async function() {
+    return this.request('/auth/github/oauth', {
+        method: 'POST'
+    });
+};
+
+APIClient.prototype.completeGitHubOAuth = async function(code, state) {
+    const result = await this.request('/auth/github/callback', {
+        method: 'POST',
+        body: JSON.stringify({ code, state })
+    });
+
+    if (result.success) {
+        this.setSession(result.sessionToken);
+        // Note: GitHub token is now stored server-side only
+    }
+
+    return result;
+};
+
+// Update APIClient to support pagination
+window.APIClient.prototype.getTranslations = async function(repo, language, page = 0, pageSize = 50, search = null) {
+    const params = new URLSearchParams({
+        page: page.toString(),
+        pageSize: pageSize.toString()
+    });
+
+    if (search) {
+        params.append('search', search);
+    }
+
     const encodedRepo = encodeURIComponent(repo);
     const result = await this.request(`/translations/${encodedRepo}/${language}?${params}`);
     return result.data || result;
 };
+
+// Global error handler
+window.addEventListener('error', (event) => {
+    console.error('Application error:', event.error);
+    // Could send to error tracking service
+});
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {

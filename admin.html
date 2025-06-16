@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Translation Tool Admin</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #333;
+      line-height: 1.6;
+    }
+
+    .admin-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .admin-header {
+      background: white;
+      padding: 20px 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .admin-title {
+      font-size: 28px;
+      color: #2c3e50;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .admin-badge {
+      background: #e74c3c;
+      color: white;
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .admin-nav {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .nav-button {
+      padding: 12px 24px;
+      background: white;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.3s ease;
+    }
+
+    .nav-button.active {
+      background: #3498db;
+      color: white;
+      border-color: #3498db;
+    }
+
+    .admin-section {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      display: none;
+    }
+
+    .admin-section.active {
+      display: block;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .stat-card {
+      background: #f8f9fa;
+      padding: 25px;
+      border-radius: 8px;
+      border-left: 4px solid #3498db;
+    }
+
+    .stat-value {
+      font-size: 36px;
+      font-weight: bold;
+      color: #2c3e50;
+    }
+
+    .stat-label {
+      color: #7f8c8d;
+      font-size: 14px;
+      margin-top: 5px;
+    }
+
+    .token-form {
+      background: #f8f9fa;
+      padding: 25px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #2c3e50;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.3s ease;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #3498db;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+      background: #3498db;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2980b9;
+      transform: translateY(-1px);
+    }
+
+    .btn-danger {
+      background: #e74c3c;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #c0392b;
+    }
+
+    .btn-secondary {
+      background: #95a5a6;
+      color: white;
+    }
+
+    .tokens-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    .tokens-table th,
+    .tokens-table td {
+      padding: 15px;
+      text-align: left;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .tokens-table th {
+      background: #f8f9fa;
+      font-weight: 600;
+      color: #2c3e50;
+    }
+
+    .token-code {
+      font-family: monospace;
+      background: #f8f9fa;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-active {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .status-expired {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .status-revoked {
+      background: #e2e3e5;
+      color: #383d41;
+    }
+
+    .usage-bar {
+      width: 100px;
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .usage-fill {
+      height: 100%;
+      background: #3498db;
+      transition: width 0.3s ease;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 10px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 90vh;
+      overflow: auto;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .modal-header {
+      padding: 25px;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-body {
+      padding: 25px;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 24px;
+      color: #7f8c8d;
+      cursor: pointer;
+    }
+
+    .admin-list {
+      list-style: none;
+      margin-top: 20px;
+    }
+
+    .admin-item {
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .admin-info {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .admin-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #3498db;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #7f8c8d;
+    }
+
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #3498db;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px;
+      color: #7f8c8d;
+    }
+
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+      opacity: 0.3;
+    }
+
+    .charts-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 30px;
+      margin-top: 30px;
+    }
+
+    .chart-card {
+      background: #f8f9fa;
+      padding: 25px;
+      border-radius: 8px;
+    }
+
+    .chart-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #2c3e50;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+<div class="admin-container">
+  <div class="admin-header">
+    <h1 class="admin-title">
+      🛡️ Translation Tool Admin
+      <span class="admin-badge">ADMIN</span>
+    </h1>
+    <div>
+      <span id="admin-user-name"></span>
+      <button class="btn btn-secondary" onclick="adminApp.logout()">Logout</button>
+    </div>
+  </div>
+
+  <nav class="admin-nav">
+    <button class="nav-button active" onclick="adminApp.showSection('dashboard')">
+      📊 Dashboard
+    </button>
+    <button class="nav-button" onclick="adminApp.showSection('tokens')">
+      🎫 Token Management
+    </button>
+    <button class="nav-button" onclick="adminApp.showSection('users')">
+      👥 User Management
+    </button>
+    <button class="nav-button" onclick="adminApp.showSection('settings')">
+      ⚙️ Settings
+    </button>
+  </nav>
+
+  <!-- Dashboard Section -->
+  <div id="dashboard-section" class="admin-section active">
+    <h2>Dashboard Overview</h2>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-active-tokens">0</div>
+        <div class="stat-label">Active Tokens</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-total-users">0</div>
+        <div class="stat-label">Total Users</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-translations">0</div>
+        <div class="stat-label">Translations This Month</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-languages">0</div>
+        <div class="stat-label">Active Languages</div>
+      </div>
+    </div>
+
+    <div class="charts-container">
+      <div class="chart-card">
+        <h3 class="chart-title">Token Usage (Last 30 Days)</h3>
+        <canvas id="token-usage-chart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3 class="chart-title">Translation Activity</h3>
+        <canvas id="translation-activity-chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Token Management Section -->
+  <div id="tokens-section" class="admin-section">
+    <h2>Token Management</h2>
+
+    <div class="token-form">
+      <h3>Create New Token</h3>
+      <form id="create-token-form" onsubmit="adminApp.createToken(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Description</label>
+            <input type="text" name="description" placeholder="Token for Q1 2024 translators" required>
+          </div>
+          <div class="form-group">
+            <label>Expiration</label>
+            <select name="expiration">
+              <option value="30">30 days</option>
+              <option value="90" selected>90 days</option>
+              <option value="180">180 days</option>
+              <option value="365">1 year</option>
+              <option value="0">Never</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Usage Limit (optional)</label>
+            <input type="number" name="usageLimit" placeholder="Leave empty for unlimited">
+          </div>
+          <div class="form-group">
+            <label>Allowed Languages (optional)</label>
+            <input type="text" name="allowedLanguages" placeholder="cr,iu,oj (comma separated)">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Allowed Repositories (optional)</label>
+          <input type="text" name="allowedRepositories" placeholder="owner/repo1,owner/repo2">
+        </div>
+
+        <button type="submit" class="btn btn-primary">Generate Token</button>
+      </form>
+    </div>
+
+    <div class="token-filters">
+      <button class="btn btn-secondary" onclick="adminApp.loadTokens('active')">Active Tokens</button>
+      <button class="btn btn-secondary" onclick="adminApp.loadTokens('all')">All Tokens</button>
+      <button class="btn btn-secondary" onclick="adminApp.exportTokens()">Export CSV</button>
+    </div>
+
+    <table class="tokens-table">
+      <thead>
+      <tr>
+        <th>Token</th>
+        <th>Description</th>
+        <th>Status</th>
+        <th>Usage</th>
+        <th>Created</th>
+        <th>Expires</th>
+        <th>Actions</th>
+      </tr>
+      </thead>
+      <tbody id="tokens-list">
+      <tr>
+        <td colspan="7" class="loading">
+          <div class="spinner"></div>
+          Loading tokens...
+        </td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- User Management Section -->
+  <div id="users-section" class="admin-section">
+    <h2>User Management</h2>
+
+    <div class="form-group">
+      <input type="text" id="user-search" placeholder="Search users by name or email..." onkeyup="adminApp.searchUsers()">
+    </div>
+
+    <h3>Admin Users</h3>
+    <ul class="admin-list" id="admin-users-list">
+      <li class="loading">
+        <div class="spinner"></div>
+        Loading admin users...
+      </li>
+    </ul>
+
+    <button class="btn btn-primary" onclick="adminApp.showAddAdminModal()">
+      Add Admin User
+    </button>
+
+    <h3 style="margin-top: 40px;">Recent Users</h3>
+    <table class="tokens-table">
+      <thead>
+      <tr>
+        <th>User</th>
+        <th>Email</th>
+        <th>Auth Method</th>
+        <th>Last Active</th>
+        <th>Translations</th>
+        <th>Actions</th>
+      </tr>
+      </thead>
+      <tbody id="users-list">
+      <tr>
+        <td colspan="6" class="loading">
+          <div class="spinner"></div>
+          Loading users...
+        </td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Settings Section -->
+  <div id="settings-section" class="admin-section">
+    <h2>Settings</h2>
+
+    <div class="form-group">
+      <h3>Repository Configuration</h3>
+      <p>Configure which repositories are available for translation.</p>
+      <textarea id="repo-config" rows="10" style="font-family: monospace;">
+Loading repository configuration...
+                </textarea>
+      <button class="btn btn-primary" onclick="adminApp.saveRepoConfig()">
+        Save Configuration
+      </button>
+    </div>
+
+    <div class="form-group" style="margin-top: 40px;">
+      <h3>Webhook Configuration</h3>
+      <p>GitHub App webhook endpoint:</p>
+      <div class="token-code">
+        https://gander-social-translation-tool.melody-rae-lumen.workers.dev/api/webhooks/github
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top: 40px;">
+      <h3>OAuth Configuration</h3>
+      <p>GitHub OAuth callback URL:</p>
+      <div class="token-code">
+        https://melodylumen.github.io/auth/callback
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Token Created Modal -->
+<div id="token-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Token Created Successfully</h2>
+      <button class="close-btn" onclick="adminApp.closeModal('token-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <p>Your new token has been created. Please copy it now as it won't be shown again:</p>
+      <div class="token-code" id="new-token-display" style="margin: 20px 0; padding: 15px; background: #fffbcc;">
+        <!-- Token will be displayed here -->
+      </div>
+      <button class="btn btn-primary" onclick="adminApp.copyToken()">Copy Token</button>
+      <button class="btn btn-secondary" onclick="adminApp.closeModal('token-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Admin Modal -->
+<div id="add-admin-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Add Admin User</h2>
+      <button class="close-btn" onclick="adminApp.closeModal('add-admin-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <form onsubmit="adminApp.addAdmin(event)">
+        <div class="form-group">
+          <label>GitHub Username</label>
+          <input type="text" name="githubUsername" placeholder="e.g., melodylubm" required>
+        </div>
+        <div class="form-group">
+          <label>Permissions</label>
+          <label style="font-weight: normal;">
+            <input type="checkbox" name="canManageTokens" checked> Can Manage Tokens
+          </label>
+          <label style="font-weight: normal;">
+            <input type="checkbox" name="canManageUsers" checked> Can Manage Users
+          </label>
+          <label style="font-weight: normal;">
+            <input type="checkbox" name="canViewStats" checked> Can View Statistics
+          </label>
+        </div>
+        <button type="submit" class="btn btn-primary">Add Admin</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="scripts/admin-app.js"></script>
+</body>
+</html>
